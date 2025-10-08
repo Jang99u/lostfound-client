@@ -13,8 +13,6 @@ import {
   X,
   AlertCircle,
   Sparkles,
-  FileText,
-  Eye
 } from 'lucide-react';
 
 import Card from '../../components/common/Card';
@@ -97,7 +95,7 @@ const CreateLostItemPage = () => {
   };
 
   // AI 분석 시뮬레이션
-  const simulateAIAnalysis = (file: File) => {
+  const simulateAIAnalysis = (_file: File) => {
     setLoading(true);
     
     setTimeout(() => {
@@ -207,7 +205,7 @@ const CreateLostItemPage = () => {
                       </div>
                       <div className="space-y-2 text-sm text-blue-800">
                         <p><strong>추천 이름:</strong> {aiAnalysis.suggestedName}</p>
-                        <p><strong>추천 카테고리:</strong> {ItemCategoryLabels[aiAnalysis.suggestedCategory]}</p>
+                        <p><strong>추천 카테고리:</strong> {aiAnalysis.suggestedCategory ? ItemCategoryLabels[aiAnalysis.suggestedCategory] : '분석 중...'}</p>
                         <p><strong>추출된 텍스트:</strong> {aiAnalysis.extractedText}</p>
                       </div>
                       <Button 

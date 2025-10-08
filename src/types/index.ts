@@ -1,6 +1,7 @@
 // 사용자 관련 타입
 export interface User {
   id: string;
+  loginId: string;
   email: string;
   name: string;
   phone?: string;
@@ -30,6 +31,9 @@ export const ItemCategoryLabels: Record<ItemCategory, string> = {
   [ITEM_CATEGORIES.ETC]: '기타'
 };
 
+// 분실물 상태 타입
+export type LostItemStatus = 'REGISTERED' | 'MATCHED' | 'COMPLETED' | 'EXPIRED';
+
 // 분실물 관련 타입
 export interface LostItem {
   id: number;
@@ -40,6 +44,7 @@ export interface LostItem {
   location: string;
   imageUrl?: string;
   embeddingId?: number;
+  status?: LostItemStatus;
 }
 
 // 인증 관련 타입

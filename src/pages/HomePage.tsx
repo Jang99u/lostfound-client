@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { 
   Search, 
   Plus, 
@@ -11,10 +11,8 @@ import {
   Shield, 
   Clock,
   ArrowRight,
-  Filter,
   Sparkles,
   CheckCircle,
-  Users,
   Star
 } from 'lucide-react';
 
@@ -295,7 +293,7 @@ const HomePage = () => {
                       {item.itemName}
                     </h3>
                     <Badge variant="info" size="sm">
-                      {ItemCategoryLabels[item.category]}
+                      {item.category ? ItemCategoryLabels[item.category as ItemCategory] : '기타'}
                     </Badge>
                   </div>
                   

@@ -67,6 +67,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       // 현재는 loginId만 저장
       const userInfo: User = {
         id: loginId,
+        loginId: loginId,
         email: '',
         name: loginId,
         createdAt: new Date().toISOString()
@@ -97,6 +98,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       // 현재는 loginId만 저장
       const userInfo: User = {
         id: loginId,
+        loginId: loginId,
         email: '',
         name: loginId,
         createdAt: new Date().toISOString()

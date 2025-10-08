@@ -1,27 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Package, 
   Plus, 
-  Search, 
-  Eye, 
-  Edit, 
   Trash2, 
-  Calendar, 
   MapPin, 
   Clock,
   CheckCircle,
   AlertCircle,
   TrendingUp,
-  Users,
   Bell,
   Settings,
-  Filter,
   Grid3X3,
   List,
-  MoreHorizontal,
-  Download,
-  Share2
+  Users
 } from 'lucide-react';
 
 import Card from '../components/common/Card';
@@ -33,7 +25,7 @@ import Modal from '../components/common/Modal';
 import { useAuth } from '../contexts/AuthContext';
 import { userApi } from '../apis/user';
 import { lostItemApi } from '../apis/lostItem';
-import type { LostItem, MyPageData } from '../types';
+import type { MyPageData } from '../types';
 import { formatRelativeTime, formatNumber } from '../utils/cn';
 
 type TabType = 'all' | 'registered' | 'matched' | 'completed';
@@ -41,7 +33,7 @@ type ViewMode = 'grid' | 'list';
 
 const MyPage = () => {
   const navigate = useNavigate();
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   
   // 상태 관리
   const [activeTab, setActiveTab] = useState<TabType>('all');
@@ -74,10 +66,11 @@ const MyPage = () => {
         const data = await userApi.getMyPage();
         setMyPageData(data);
         
-        // 통계 계산
-        const totalRegistered = data.lostItems.length;
-        const totalMatched = data.lostItems.filter(item => item.status === 'matched').length;
-        const totalCompleted = data.lostItems.filter(item => item.status === 'completed').length;
+        // 통계 계산 (안전하게 처리)
+        const lostItems = data.lostItems || [];
+        const totalRegistered = lostItems.length;
+        const totalMatched = lostItems.filter(item => item.status === 'MATCHED').length;
+        const totalCompleted = lostItems.filter(item => item.status === 'COMPLETED').length;
         const successRate = totalRegistered > 0 ? Math.round((totalCompleted / totalRegistered) * 100) : 0;
         
         setStats({
@@ -99,17 +92,18 @@ const MyPage = () => {
 
   // 탭별 필터링된 아이템
   const getFilteredItems = () => {
-    if (!myPageData) return [];
+    if (!myPageData || !myPageData.lostItems) return [];
     
+    const lostItems = myPageData.lostItems;
     switch (activeTab) {
       case 'registered':
-        return myPageData.lostItems.filter(item => item.status === 'registered');
+        return lostItems.filter(item => item.status === 'REGISTERED');
       case 'matched':
-        return myPageData.lostItems.filter(item => item.status === 'matched');
+        return lostItems.filter(item => item.status === 'MATCHED');
       case 'completed':
-        return myPageData.lostItems.filter(item => item.status === 'completed');
+        return lostItems.filter(item => item.status === 'COMPLETED');
       default:
-        return myPageData.lostItems;
+        return lostItems;
     }
   };
 
@@ -153,13 +147,13 @@ const MyPage = () => {
   };
 
   // 상태별 배지 색상
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string | undefined) => {
     switch (status) {
-      case 'registered':
+      case 'REGISTERED':
         return <Badge variant="info" size="sm">등록됨</Badge>;
-      case 'matched':
+      case 'MATCHED':
         return <Badge variant="warning" size="sm">매칭중</Badge>;
-      case 'completed':
+      case 'COMPLETED':
         return <Badge variant="success" size="sm">회수완료</Badge>;
       default:
         return <Badge variant="default" size="sm">알 수 없음</Badge>;

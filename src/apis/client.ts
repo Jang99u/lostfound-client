@@ -1,7 +1,12 @@
 import axios from 'axios';
 
 // API 기본 설정
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://api.lostfound-dscd.site';
+const API_BASE_URL = import.meta.env.VITE_API_URL;
+
+// 디버깅용 로그
+console.log('🔧 API_BASE_URL:', API_BASE_URL);
+console.log('🔧 VITE_API_URL env:', import.meta.env.VITE_API_URL);
+console.log('🔧 Mode:', import.meta.env.MODE);
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,

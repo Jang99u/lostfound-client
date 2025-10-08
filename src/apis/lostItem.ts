@@ -3,7 +3,6 @@ import type {
   LostItem, 
   CreateLostItemRequest,
   SearchLostItemRequest,
-  LostItemFilters, 
   PaginatedResponse,
   PaginationParams,
   ApiResponse,

@@ -1,16 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Bell, 
-  CheckCircle, 
   AlertCircle, 
   Info, 
   Sparkles, 
   Users, 
   Package, 
-  Clock,
-  Filter,
-  MoreHorizontal,
   Eye,
   EyeOff,
   Trash2,

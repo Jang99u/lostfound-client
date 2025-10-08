@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { 
   Search, 
@@ -9,12 +9,8 @@ import {
   Calendar, 
   Package, 
   Clock,
-  ArrowUpDown,
   X,
-  Sparkles,
-  SlidersHorizontal,
-  SortAsc,
-  SortDesc
+  Sparkles
 } from 'lucide-react';
 
 import Card from '../../components/common/Card';

@@ -85,7 +85,7 @@ const LoginPage = () => {
               onChange={handleInputChange}
               required
               disabled={isLoading}
-              icon={<User className="w-5 h-5" />}
+              leftIcon={<User className="w-5 h-5" />}
             />
 
             <Input
@@ -97,7 +97,7 @@ const LoginPage = () => {
               onChange={handleInputChange}
               required
               disabled={isLoading}
-              icon={<Lock className="w-5 h-5" />}
+              leftIcon={<Lock className="w-5 h-5" />}
               rightIcon={
                 <button
                   type="button"
