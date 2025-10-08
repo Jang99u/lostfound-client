@@ -1,25 +1,49 @@
-import { ReactNode } from 'react';
+import React from 'react';
+import Breadcrumb from './Breadcrumb';
 
 interface PageHeaderProps {
   title: string;
   subtitle?: string;
-  children?: ReactNode;
+  breadcrumb?: boolean;
+  children?: React.ReactNode;
+  className?: string;
 }
 
-const PageHeader = ({ title, subtitle, children }: PageHeaderProps) => {
+const PageHeader: React.FC<PageHeaderProps> = ({
+  title,
+  subtitle,
+  breadcrumb = true,
+  children,
+  className = ''
+}) => {
   return (
-    <div className="mb-8">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">{title}</h1>
-        {subtitle && (
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">{subtitle}</p>
+    <div className={`bg-white border-b border-gray-200 ${className}`}>
+      <div className="container mx-auto px-4 py-6">
+        {breadcrumb && (
+          <div className="mb-4">
+            <Breadcrumb />
+          </div>
         )}
-      </div>
-      {children && (
-        <div className="mt-6 flex justify-center">
-          {children}
+        
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">
+              {title}
+            </h1>
+            {subtitle && (
+              <p className="text-gray-600 mt-1">
+                {subtitle}
+              </p>
+            )}
+          </div>
+          
+          {children && (
+            <div className="flex items-center space-x-3">
+              {children}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 };

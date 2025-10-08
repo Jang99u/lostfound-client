@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { QueryProvider } from './contexts/QueryContext';
 import { AuthProvider } from './contexts/AuthContext';
+import Layout from './components/common/Layout';
 
 // Pages
 import HomePage from './pages/HomePage';
@@ -9,6 +10,7 @@ import LostItemListPage from './pages/lostitem/LostItemListPage';
 import LostItemDetailPage from './pages/lostitem/LostItemDetailPage';
 import CreateLostItemPage from './pages/lostitem/CreateLostItemPage';
 import MyPage from './pages/MyPage';
+import NotificationsPage from './pages/NotificationsPage';
 
 function App() {
   return (
@@ -17,13 +19,45 @@ function App() {
         <Router>
           <div className="App">
             <Routes>
-              {/* 공개 라우트 */}
+              {/* 홈페이지 - 헤더 없이 전체 화면 */}
               <Route path="/" element={<HomePage />} />
-              <Route path="/auth/login" element={<LoginPage />} />
-              <Route path="/lost-items" element={<LostItemListPage />} />
-              <Route path="/lost-items/:id" element={<LostItemDetailPage />} />
-              <Route path="/lost-items/create" element={<CreateLostItemPage />} />
-              <Route path="/mypage" element={<MyPage />} />
+              
+              {/* 일반 페이지들 - 헤더 포함 */}
+              <Route path="/auth/login" element={
+                <Layout maxWidth="sm" padding="lg">
+                  <LoginPage />
+                </Layout>
+              } />
+              
+              <Route path="/lost-items" element={
+                <Layout maxWidth="xl" padding="md">
+                  <LostItemListPage />
+                </Layout>
+              } />
+              
+              <Route path="/lost-items/:id" element={
+                <Layout maxWidth="lg" padding="md">
+                  <LostItemDetailPage />
+                </Layout>
+              } />
+              
+              <Route path="/lost-items/create" element={
+                <Layout maxWidth="lg" padding="md">
+                  <CreateLostItemPage />
+                </Layout>
+              } />
+              
+              <Route path="/mypage" element={
+                <Layout maxWidth="xl" padding="md">
+                  <MyPage />
+                </Layout>
+              } />
+              
+              <Route path="/notifications" element={
+                <Layout maxWidth="xl" padding="md">
+                  <NotificationsPage />
+                </Layout>
+              } />
               
               {/* 보호된 라우트 (추후 구현) */}
               {/* <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} /> */}

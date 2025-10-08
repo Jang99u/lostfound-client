@@ -1,73 +1,105 @@
 import apiClient from './client';
 import type { 
   LostItem, 
-  CreateLostItemRequest, 
+  CreateLostItemRequest,
+  SearchLostItemRequest,
   LostItemFilters, 
   PaginatedResponse,
-  PaginationParams 
+  PaginationParams,
+  ApiResponse,
+  ItemCategory
 } from '../types';
 
 // 분실물 관련 API
 export const lostItemApi = {
-  // 분실물 목록 조회 (필터링 및 페이지네이션)
-  getLostItems: async (
-    filters: LostItemFilters = {},
-    pagination: PaginationParams = { page: 1, limit: 10 }
-  ): Promise<PaginatedResponse<LostItem>> => {
-    const params = new URLSearchParams();
+  // 분실물 등록 (습득자)
+  createLostItem: async (itemData: CreateLostItemRequest): Promise<LostItem> => {
+    const formData = new FormData();
+    formData.append('itemName', itemData.itemName);
+    formData.append('category', itemData.category);
+    formData.append('description', itemData.description);
+    formData.append('foundDate', itemData.foundDate);
+    formData.append('location', itemData.location);
     
-    // 필터 파라미터 추가
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value !== undefined && value !== '') {
-        params.append(key, value.toString());
+    if (itemData.image) {
+      formData.append('image', itemData.image);
+    }
+
+    const response = await apiClient.post<ApiResponse<LostItem>>(
+      '/api/v1/lost-items',
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       }
-    });
-    
-    // 페이지네이션 파라미터 추가
-    params.append('page', pagination.page.toString());
-    params.append('limit', pagination.limit.toString());
-    
-    const response = await apiClient.get(`/lost-items?${params.toString()}`);
-    return response.data;
+    );
+    return response.data.data;
+  },
+
+  // 분실물 전체 조회 (페이징)
+  getAllLostItems: async (
+    pagination: PaginationParams = { page: 0, size: 20 }
+  ): Promise<PaginatedResponse<LostItem>> => {
+    const response = await apiClient.get<ApiResponse<PaginatedResponse<LostItem>>>(
+      `/api/v1/lost-items?page=${pagination.page}&size=${pagination.size}`
+    );
+    return response.data.data;
   },
 
   // 분실물 상세 조회
-  getLostItemById: async (id: string): Promise<LostItem> => {
-    const response = await apiClient.get(`/lost-items/${id}`);
-    return response.data;
+  getLostItemById: async (id: number): Promise<LostItem> => {
+    const response = await apiClient.get<ApiResponse<LostItem>>(
+      `/api/v1/lost-items/${id}`
+    );
+    return response.data.data;
   },
 
-  // 분실물 등록 (습득자)
-  createLostItem: async (itemData: CreateLostItemRequest): Promise<LostItem> => {
-    const response = await apiClient.post('/lost-items', itemData);
-    return response.data;
+  // 카테고리별 필터링
+  getLostItemsByCategory: async (
+    category: ItemCategory,
+    pagination: PaginationParams = { page: 0, size: 20 }
+  ): Promise<PaginatedResponse<LostItem>> => {
+    const response = await apiClient.get<ApiResponse<PaginatedResponse<LostItem>>>(
+      `/api/v1/lost-items/category/${category}?page=${pagination.page}&size=${pagination.size}`
+    );
+    return response.data.data;
   },
 
-  // 분실물 수정
-  updateLostItem: async (id: string, itemData: Partial<CreateLostItemRequest>): Promise<LostItem> => {
-    const response = await apiClient.put(`/lost-items/${id}`, itemData);
-    return response.data;
+  // 날짜 범위별 필터링
+  getLostItemsByDateRange: async (
+    startDate: string,
+    endDate: string,
+    pagination: PaginationParams = { page: 0, size: 20 }
+  ): Promise<PaginatedResponse<LostItem>> => {
+    const response = await apiClient.get<ApiResponse<PaginatedResponse<LostItem>>>(
+      `/api/v1/lost-items/date-range?startDate=${startDate}&endDate=${endDate}&page=${pagination.page}&size=${pagination.size}`
+    );
+    return response.data.data;
+  },
+
+  // 장소별 필터링
+  getLostItemsByLocation: async (
+    location: string,
+    pagination: PaginationParams = { page: 0, size: 20 }
+  ): Promise<PaginatedResponse<LostItem>> => {
+    const response = await apiClient.get<ApiResponse<PaginatedResponse<LostItem>>>(
+      `/api/v1/lost-items/location?location=${encodeURIComponent(location)}&page=${pagination.page}&size=${pagination.size}`
+    );
+    return response.data.data;
+  },
+
+  // AI 자연어 검색
+  searchLostItems: async (searchRequest: SearchLostItemRequest): Promise<PaginatedResponse<LostItem>> => {
+    const response = await apiClient.post<ApiResponse<PaginatedResponse<LostItem>>>(
+      '/api/v1/lost-items/search',
+      searchRequest
+    );
+    return response.data.data;
   },
 
   // 분실물 삭제
-  deleteLostItem: async (id: string): Promise<void> => {
-    await apiClient.delete(`/lost-items/${id}`);
-  },
-
-  // 자연어 검색
-  searchLostItems: async (query: string): Promise<LostItem[]> => {
-    const response = await apiClient.get(`/lost-items/search?q=${encodeURIComponent(query)}`);
-    return response.data;
-  },
-
-  // 내가 등록한 분실물 목록
-  getMyLostItems: async (): Promise<LostItem[]> => {
-    const response = await apiClient.get('/lost-items/my');
-    return response.data;
-  },
-
-  // 분실물 주인 찾기 신청
-  claimLostItem: async (id: string, contactInfo: { phone: string; message?: string }): Promise<void> => {
-    await apiClient.post(`/lost-items/${id}/claim`, contactInfo);
+  deleteLostItem: async (id: number): Promise<void> => {
+    await apiClient.delete(`/api/v1/lost-items/${id}`);
   }
 };

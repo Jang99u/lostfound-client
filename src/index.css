@@ -1,3 +1,6 @@
+/* 디자인 시스템 import */
+@import './styles/design-system.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -10,76 +13,14 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #fafafa;
+  background: var(--color-bg-secondary);
   min-height: 100vh;
-  color: #1f2937;
-}
-
-/* 깔끔한 카드 스타일 */
-.card {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  border: 1px solid #e5e7eb;
-}
-
-.card-hover {
-  transition: all 0.2s ease;
-}
-
-.card-hover:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  transform: translateY(-2px);
-}
-
-/* 버튼 스타일 */
-.btn-primary {
-  background: #3b82f6;
-  color: white;
-  border-radius: 8px;
-  padding: 12px 24px;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-
-.btn-primary:hover {
-  background: #2563eb;
-  transform: translateY(-1px);
-}
-
-.btn-secondary {
-  background: #10b981;
-  color: white;
-  border-radius: 8px;
-  padding: 12px 24px;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-
-.btn-secondary:hover {
-  background: #059669;
-  transform: translateY(-1px);
+  color: var(--color-text-primary);
 }
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
-}
-
-/* 커스텀 스타일 */
-.aspect-w-16 {
-  position: relative;
-  padding-bottom: 56.25%; /* 16:9 */
-}
-
-.aspect-h-9 {
-  position: absolute;
-  height: 100%;
-  width: 100%;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
 }
 
 /* 스크롤바 스타일링 */
@@ -88,30 +29,47 @@ code {
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: var(--color-gray-100);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px;
+  background: var(--color-gray-300);
+  border-radius: var(--radius-sm);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: var(--color-gray-400);
 }
 
 /* 간단한 애니메이션 */
 @keyframes fadeIn {
   from {
     opacity: 0;
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
+    transform: translateY(0);
   }
 }
 
 .fade-in {
   animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.slide-in {
+  animation: slideIn 0.3s ease-out;
 }
 
 /* 반응형 그리드 */

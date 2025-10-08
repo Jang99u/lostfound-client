@@ -7,44 +7,40 @@ export interface User {
   createdAt: string;
 }
 
+// 분실물 카테고리 (LostItem보다 먼저 정의)
+export const ITEM_CATEGORIES = {
+  ELECTRONICS: 'ELECTRONICS',
+  WALLET_CARD: 'WALLET_CARD',
+  CLOTHING: 'CLOTHING',
+  BAG: 'BAG',
+  DOCUMENT: 'DOCUMENT',
+  KEY: 'KEY',
+  ETC: 'ETC'
+} as const;
+
+export type ItemCategory = typeof ITEM_CATEGORIES[keyof typeof ITEM_CATEGORIES];
+
+export const ItemCategoryLabels: Record<ItemCategory, string> = {
+  [ITEM_CATEGORIES.ELECTRONICS]: '전자기기',
+  [ITEM_CATEGORIES.WALLET_CARD]: '지갑/카드',
+  [ITEM_CATEGORIES.CLOTHING]: '의류/액세서리',
+  [ITEM_CATEGORIES.BAG]: '가방/파우치',
+  [ITEM_CATEGORIES.DOCUMENT]: '신분증/서류',
+  [ITEM_CATEGORIES.KEY]: '열쇠/출입카드',
+  [ITEM_CATEGORIES.ETC]: '기타'
+};
+
 // 분실물 관련 타입
 export interface LostItem {
-  id: string;
-  title: string;
-  description: string;
+  id: number;
+  itemName: string;
   category: ItemCategory;
-  location: string;
+  description: string;
   foundDate: string;
-  imageUrls?: string[];
-  status: ItemStatus;
-  finderId: string;
-  finder?: User;
-  createdAt: string;
-  updatedAt: string;
+  location: string;
+  imageUrl?: string;
+  embeddingId?: number;
 }
-
-// 분실물 카테고리
-export const ItemCategory = {
-  ELECTRONICS: 'electronics',
-  CLOTHING: 'clothing',
-  ACCESSORIES: 'accessories',
-  DOCUMENTS: 'documents',
-  BOOKS: 'books',
-  KEYS: 'keys',
-  WALLET: 'wallet',
-  OTHER: 'other'
-} as const;
-
-export type ItemCategory = typeof ItemCategory[keyof typeof ItemCategory];
-
-// 분실물 상태
-export const ItemStatus = {
-  FOUND: 'found',        // 습득됨
-  CLAIMED: 'claimed',    // 주인을 찾음
-  RETURNED: 'returned'   // 반환됨
-} as const;
-
-export type ItemStatus = typeof ItemStatus[keyof typeof ItemStatus];
 
 // 인증 관련 타입
 export interface LoginRequest {
@@ -66,21 +62,20 @@ export interface AuthResponse {
 export interface ApiResponse<T> {
   success: boolean;
   data: T;
-  message?: string;
+  message: string;
 }
 
 // 페이지네이션 타입
 export interface PaginationParams {
   page: number;
-  limit: number;
+  size: number;
 }
 
 export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
+  items: T[];
+  totalCount: number;
   page: number;
-  limit: number;
-  totalPages: number;
+  size: number;
 }
 
 // 필터링 타입
@@ -89,16 +84,26 @@ export interface LostItemFilters {
   location?: string;
   startDate?: string;
   endDate?: string;
-  status?: ItemStatus;
-  search?: string;
 }
 
 // 분실물 등록 요청 타입
 export interface CreateLostItemRequest {
-  title: string;
-  description: string;
+  itemName: string;
   category: ItemCategory;
-  location: string;
+  description: string;
   foundDate: string;
-  imageUrls?: string[];
+  location: string;
+  image?: File;
+}
+
+// 검색 요청 타입
+export interface SearchLostItemRequest {
+  query: string;
+  topK?: number;
+}
+
+// 마이페이지 타입
+export interface MyPageData {
+  user: User;
+  lostItems: LostItem[];
 }

@@ -1,1 +1,1 @@
-# lostfound-client
+# LostFound 프론트엔드

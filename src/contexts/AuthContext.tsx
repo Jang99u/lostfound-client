@@ -48,14 +48,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const login = async (loginId: string, password: string) => {
     try {
+      console.log('🔍 AuthContext: Starting login process');
       setIsLoading(true);
-      console.log('AuthContext: Calling authApi.login with', { loginId, password });
+      
       const response = await authApi.login({ loginId, password });
-      console.log('AuthContext: Login response:', response);
+      console.log('🔍 AuthContext: Login response received:', response);
       
       // JWT 토큰 저장
+      if (!response.accessToken || !response.refreshToken) {
+        throw new Error('Invalid tokens received from server');
+      }
+      
       localStorage.setItem('token', response.accessToken);
       localStorage.setItem('refreshToken', response.refreshToken);
+      console.log('✅ Tokens saved to localStorage');
       
       // 사용자 정보는 토큰에서 추출하거나 별도 API로 가져오기
       // 현재는 loginId만 저장
@@ -65,10 +71,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         name: loginId,
         createdAt: new Date().toISOString()
       };
+      
       localStorage.setItem('user', JSON.stringify(userInfo));
       setUser(userInfo);
+      console.log('✅ User info set:', userInfo);
+      
     } catch (error) {
-      console.error('Login failed:', error);
+      console.error('❌ AuthContext: Login failed:', error);
       throw error;
     } finally {
       setIsLoading(false);
@@ -78,9 +87,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const register = async (loginId: string, password: string) => {
     try {
       setIsLoading(true);
-      console.log('AuthContext: Calling authApi.register with', { loginId, password });
       const response = await authApi.register({ loginId, password });
-      console.log('AuthContext: Register response:', response);
       
       // JWT 토큰 저장
       localStorage.setItem('token', response.accessToken);
