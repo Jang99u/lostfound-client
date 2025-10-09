@@ -11,15 +11,13 @@ import {
   ArrowLeft,
   ArrowRight,
   X,
-  AlertCircle,
-  Sparkles,
+  AlertCircle
 } from 'lucide-react';
 
 import Card from '../../components/common/Card';
 import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Badge from '../../components/common/Badge';
-import LoadingSpinner from '../../components/common/LoadingSpinner';
 import { lostItemApi } from '../../apis/lostItem';
 import { ItemCategoryLabels } from '../../types';
 import type { ItemCategory, CreateLostItemRequest } from '../../types';
@@ -45,14 +43,6 @@ const CreateLostItemPage = () => {
     description: '',
     foundDate: '',
     location: ''
-  });
-  
-  // AI 분석 결과 (시뮬레이션)
-  const [aiAnalysis, setAiAnalysis] = useState({
-    suggestedName: '',
-    suggestedCategory: '' as ItemCategory | '',
-    confidence: 0,
-    extractedText: ''
   });
 
   // 단계별 완료 상태
@@ -88,34 +78,7 @@ const CreateLostItemPage = () => {
         image: file,
         imagePreview: URL.createObjectURL(file)
       }));
-      
-      // AI 분석 시뮬레이션
-      simulateAIAnalysis(file);
     }
-  };
-
-  // AI 분석 시뮬레이션
-  const simulateAIAnalysis = (_file: File) => {
-    setLoading(true);
-    
-    setTimeout(() => {
-      setAiAnalysis({
-        suggestedName: '검은색 지갑',
-        suggestedCategory: 'WALLET_CARD',
-        confidence: 85,
-        extractedText: '검은색 가죽 지갑, 카드 여러 장 포함'
-      });
-      setLoading(false);
-    }, 2000);
-  };
-
-  // AI 제안 적용
-  const applyAISuggestion = () => {
-    setFormData(prev => ({
-      ...prev,
-      itemName: aiAnalysis.suggestedName,
-      category: aiAnalysis.suggestedCategory
-    }));
   };
 
   // 폼 제출
@@ -157,20 +120,20 @@ const CreateLostItemPage = () => {
     switch (currentStep) {
       case 1:
         return (
-          <div className="space-y-6">
-            <div className="text-center">
+          <div className="flex flex-col h-[550px] w-full">
+            <div className="text-center mb-6 w-full">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
                 습득물 사진 업로드
               </h2>
               <p className="text-gray-600">
-                발견한 물건의 사진을 업로드하면 AI가 자동으로 분석해드립니다
+                발견한 물건의 사진을 업로드해주세요
               </p>
             </div>
 
             {/* 이미지 업로드 영역 */}
-            <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors">
+            <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-blue-400 transition-colors flex-1 flex items-center justify-center w-full">
               {formData.imagePreview ? (
-                <div className="space-y-4">
+                <div className="w-full">
                   <div className="relative inline-block">
                     <img 
                       src={formData.imagePreview} 
@@ -180,45 +143,12 @@ const CreateLostItemPage = () => {
                     <button
                       onClick={() => {
                         setFormData(prev => ({ ...prev, image: null, imagePreview: '' }));
-                        setAiAnalysis({ suggestedName: '', suggestedCategory: '', confidence: 0, extractedText: '' });
                       }}
                       className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
                     >
                       <X className="w-4 h-4" />
                     </button>
                   </div>
-                  
-                  {loading && (
-                    <div className="flex items-center justify-center space-x-2 text-blue-600">
-                      <LoadingSpinner size="sm" />
-                      <span>AI가 이미지를 분석하고 있습니다...</span>
-                    </div>
-                  )}
-                  
-                  {aiAnalysis.suggestedName && !loading && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="font-semibold text-blue-900">AI 분석 결과</h3>
-                        <Badge variant="info" size="sm">
-                          {aiAnalysis.confidence}% 신뢰도
-                        </Badge>
-                      </div>
-                      <div className="space-y-2 text-sm text-blue-800">
-                        <p><strong>추천 이름:</strong> {aiAnalysis.suggestedName}</p>
-                        <p><strong>추천 카테고리:</strong> {aiAnalysis.suggestedCategory ? ItemCategoryLabels[aiAnalysis.suggestedCategory] : '분석 중...'}</p>
-                        <p><strong>추출된 텍스트:</strong> {aiAnalysis.extractedText}</p>
-                      </div>
-                      <Button 
-                        variant="primary" 
-                        size="sm" 
-                        className="mt-3"
-                        onClick={applyAISuggestion}
-                        leftIcon={<Sparkles className="w-4 h-4" />}
-                      >
-                        AI 제안 적용하기
-                      </Button>
-                    </div>
-                  )}
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -256,8 +186,8 @@ const CreateLostItemPage = () => {
 
       case 2:
         return (
-          <div className="space-y-6">
-            <div className="text-center">
+          <div className="flex flex-col h-[550px] w-full">
+            <div className="text-center mb-6 w-full">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
                 기본 정보 입력
               </h2>
@@ -266,7 +196,7 @@ const CreateLostItemPage = () => {
               </p>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 flex-1 overflow-y-auto w-full">
               <Input
                 label="습득물명 *"
                 placeholder="예: 검은색 지갑, 아이폰 14"
@@ -311,8 +241,8 @@ const CreateLostItemPage = () => {
 
       case 3:
         return (
-          <div className="space-y-6">
-            <div className="text-center">
+          <div className="flex flex-col h-[550px] w-full">
+            <div className="text-center mb-6 w-full">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
                 발견 정보 입력
               </h2>
@@ -321,7 +251,7 @@ const CreateLostItemPage = () => {
               </p>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 flex-1 overflow-y-auto w-full">
               <Input
                 label="발견 장소 *"
                 placeholder="예: 강남역 2번 출구, 홍대입구역 대합실"
@@ -337,29 +267,29 @@ const CreateLostItemPage = () => {
                 onChange={(e) => setFormData(prev => ({ ...prev, foundDate: e.target.value }))}
                 leftIcon={<Calendar className="w-4 h-4" />}
               />
-            </div>
 
-            {/* 추가 안내사항 */}
-            <Card variant="filled" className="p-4">
-              <div className="flex items-start space-x-3">
-                <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
-                <div className="text-sm text-gray-700">
-                  <p className="font-medium mb-1">등록 시 주의사항</p>
-                  <ul className="space-y-1 text-gray-600">
-                    <li>• 정확한 발견 장소와 날짜를 입력해주세요</li>
-                    <li>• 개인정보가 포함된 물건은 신중하게 등록해주세요</li>
-                    <li>• 등록 후에는 수정이 어려우니 신중하게 입력해주세요</li>
-                  </ul>
+              {/* 추가 안내사항 */}
+              <Card variant="filled" className="p-4">
+                <div className="flex items-start space-x-3">
+                  <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
+                  <div className="text-sm text-gray-700">
+                    <p className="font-medium mb-1">등록 시 주의사항</p>
+                    <ul className="space-y-1 text-gray-600">
+                      <li>• 정확한 발견 장소와 날짜를 입력해주세요</li>
+                      <li>• 개인정보가 포함된 물건은 신중하게 등록해주세요</li>
+                      <li>• 등록 후에는 수정이 어려우니 신중하게 입력해주세요</li>
+                    </ul>
+                  </div>
                 </div>
-              </div>
-            </Card>
+              </Card>
+            </div>
           </div>
         );
 
       case 4:
         return (
-          <div className="space-y-6">
-            <div className="text-center">
+          <div className="flex flex-col h-[550px] w-full">
+            <div className="text-center mb-6 w-full">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
                 등록 정보 확인
               </h2>
@@ -368,9 +298,10 @@ const CreateLostItemPage = () => {
               </p>
             </div>
 
+            <div className="flex-1 overflow-y-auto w-full">
             {/* 등록 정보 미리보기 */}
-            <Card variant="elevated" className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card variant="elevated" className="p-6 w-full">
+              <div className="grid grid-cols-2 gap-6 w-full">
                 {/* 이미지 */}
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-3">습득물 사진</h3>
@@ -431,6 +362,7 @@ const CreateLostItemPage = () => {
                 <p className="text-red-700 mt-1">{error}</p>
               </div>
             )}
+            </div>
           </div>
         );
 
@@ -494,9 +426,11 @@ const CreateLostItemPage = () => {
 
       {/* 메인 콘텐츠 */}
       <div className="container mx-auto px-4 py-8">
-        <div className="max-w-2xl mx-auto">
-          <Card variant="elevated" padding="lg">
-            {renderStepContent()}
+        <div className="w-full max-w-2xl mx-auto">
+          <Card variant="elevated" className="w-full p-8">
+            <div className="w-full">
+              {renderStepContent()}
+            </div>
           </Card>
 
           {/* 네비게이션 버튼 */}

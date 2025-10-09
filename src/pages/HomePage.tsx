@@ -12,8 +12,7 @@ import {
   Clock,
   ArrowRight,
   Sparkles,
-  CheckCircle,
-  Star
+  CheckCircle
 } from 'lucide-react';
 
 import Header from '../components/common/Header';
@@ -43,28 +42,33 @@ const HomePage = () => {
     successRate: 0
   });
 
-  // 최근 등록된 분실물 가져오기
+  // 최근 등록된 분실물 및 통계 가져오기
   useEffect(() => {
-    const fetchRecentItems = async () => {
+    const fetchData = async () => {
       try {
-        const result = await lostItemApi.getAllLostItems({ page: 0, size: 6 });
-        setRecentItems(result.items || []);
+        // 최근 아이템과 통계를 병렬로 가져오기
+        const [itemsResult, statisticsResult] = await Promise.all([
+          lostItemApi.getAllLostItems({ page: 0, size: 6 }),
+          lostItemApi.getStatistics()
+        ]);
         
-        // 통계 데이터 설정 (실제로는 별도 API 호출 필요)
+        setRecentItems(itemsResult.items || []);
+        
+        // 통계 데이터 설정 (서버에서 계산된 정확한 값 사용)
         setStats({
-          totalItems: result.totalCount || 0,
-          matchedItems: Math.floor((result.totalCount || 0) * 0.15),
-          newItemsToday: Math.floor((result.totalCount || 0) * 0.02),
-          successRate: 85
+          totalItems: statisticsResult.totalItems,
+          matchedItems: statisticsResult.matchedItems,
+          newItemsToday: statisticsResult.newItemsToday,
+          successRate: 0 // 사용하지 않음
         });
       } catch (error) {
-        console.error('Failed to fetch recent items:', error);
+        console.error('Failed to fetch data:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchRecentItems();
+    fetchData();
   }, []);
 
   // 검색 실행
@@ -175,17 +179,21 @@ const HomePage = () => {
 
                 {/* 빠른 액션 버튼들 */}
                 <div className="flex flex-wrap justify-center gap-3">
-                  <Button variant="outline" size="sm">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => navigate('/lost-items/create')}
+                  >
                     <Package className="w-4 h-4 mr-2" />
                     습득물 등록
                   </Button>
-                  <Button variant="outline" size="sm">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => navigate('/mypage')}
+                  >
                     <User className="w-4 h-4 mr-2" />
                     내 보관함
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    <Shield className="w-4 h-4 mr-2" />
-                    안전한 매칭
                   </Button>
                 </div>
               </form>
@@ -196,7 +204,7 @@ const HomePage = () => {
 
       {/* 통계 섹션 */}
       <div className="container mx-auto px-4 py-12">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
           <Card variant="filled" className="text-center">
             <div className="flex items-center justify-center mb-2">
               <Package className="w-8 h-8 text-blue-600" />
@@ -225,16 +233,6 @@ const HomePage = () => {
               +{formatNumber(stats.newItemsToday)}
             </div>
             <div className="text-sm text-gray-600">오늘 신규 등록</div>
-          </Card>
-          
-          <Card variant="filled" className="text-center">
-            <div className="flex items-center justify-center mb-2">
-              <Star className="w-8 h-8 text-yellow-600" />
-            </div>
-            <div className="text-3xl font-bold text-gray-900 mb-1">
-              {stats.successRate}%
-            </div>
-            <div className="text-sm text-gray-600">매칭 성공률</div>
           </Card>
         </div>
       </div>
@@ -358,7 +356,11 @@ const HomePage = () => {
               <p className="text-gray-600 mb-6">
                 "지하철에서 발견한 검은 지갑"과 같이 자연스러운 문장으로 검색하세요
               </p>
-              <Button variant="outline" size="sm">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => navigate('/lost-items')}
+              >
                 검색해보기
               </Button>
             </Card>
@@ -371,9 +373,13 @@ const HomePage = () => {
                 간편한 등록
               </h3>
               <p className="text-gray-600 mb-6">
-                사진만 찍으면 AI가 자동으로 정보를 추출하고 등록해드립니다
+                사진과 간단한 정보만 입력하면 빠르게 등록할 수 있습니다
               </p>
-              <Button variant="outline" size="sm">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => navigate('/lost-items/create')}
+              >
                 등록하기
               </Button>
             </Card>
@@ -388,7 +394,11 @@ const HomePage = () => {
               <p className="text-gray-600 mb-6">
                 인증된 사용자 간의 안전한 매칭과 개인정보 보호를 보장합니다
               </p>
-              <Button variant="outline" size="sm">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => navigate('/lost-items')}
+              >
                 자세히 보기
               </Button>
             </Card>

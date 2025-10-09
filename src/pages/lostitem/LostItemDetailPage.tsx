@@ -1,19 +1,55 @@
 import { useState, useEffect } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Calendar, MapPin, Tag, Trash2 } from 'lucide-react';
+import { 
+  ArrowLeft, 
+  Calendar, 
+  MapPin, 
+  Tag, 
+  MoreVertical,
+  Trash2,
+  Send
+} from 'lucide-react';
 import { ItemCategoryLabels, type LostItem } from '../../types';
 import { lostItemApi } from '../../apis/lostItem';
+import { claimApi } from '../../apis/claim';
+import { userApi } from '../../apis/user';
 import { useAuth } from '../../contexts/AuthContext';
+import Modal from '../../components/common/Modal';
+import Button from '../../components/common/Button';
+import Badge from '../../components/common/Badge';
 
 const LostItemDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+  
   const [item, setItem] = useState<LostItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [deleting, setDeleting] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showClaimModal, setShowClaimModal] = useState(false);
+  const [claimMessage, setClaimMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
+  // 현재 사용자 정보 가져오기
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      if (!isAuthenticated) return;
+      
+      try {
+        const user = await userApi.getMyInfo();
+        setCurrentUserId(Number(user.id));
+      } catch (err) {
+        console.error('Failed to fetch current user:', err);
+      }
+    };
+
+    fetchCurrentUser();
+  }, [isAuthenticated]);
+
+  // 분실물 정보 가져오기
   useEffect(() => {
     const fetchItem = async () => {
       if (!id) return;
@@ -35,23 +71,64 @@ const LostItemDetailPage = () => {
     fetchItem();
   }, [id]);
 
-  const handleDelete = async () => {
-    if (!item || !confirm('정말 이 분실물을 삭제하시겠습니까?')) {
-      return;
-    }
+  // 작성자 확인
+  const isOwner = item && currentUserId && item.userId === currentUserId;
 
-    setDeleting(true);
+  // 삭제 처리
+  const handleDelete = async () => {
+    if (!item) return;
+
+    setSubmitting(true);
     
     try {
       await lostItemApi.deleteLostItem(item.id);
-      alert('분실물이 삭제되었습니다.');
       navigate('/lost-items');
     } catch (err: any) {
       console.error('Failed to delete item:', err);
-      alert('삭제에 실패했습니다.');
+      const errorMessage = err.response?.data?.message || '분실물 삭제에 실패했습니다.';
+      setError(errorMessage);
+      setShowDeleteModal(false);
     } finally {
-      setDeleting(false);
+      setSubmitting(false);
     }
+  };
+
+  // 회수 요청 처리
+  const handleClaimRequest = async () => {
+    if (!item || !claimMessage.trim()) return;
+
+    setSubmitting(true);
+    
+    try {
+      await claimApi.createClaimRequest(item.id, { message: claimMessage });
+      setShowClaimModal(false);
+      setClaimMessage('');
+      // 성공 알림
+      alert('회수 요청이 전송되었습니다. 습득자의 응답을 기다려주세요.');
+      // 상태 업데이트를 위해 페이지 새로고침
+      window.location.reload();
+    } catch (err: any) {
+      console.error('Failed to create claim request:', err);
+      const errorMessage = err.response?.data?.message || '회수 요청에 실패했습니다.';
+      setError(errorMessage);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // 상태 배지 렌더링
+  const renderStatusBadge = () => {
+    if (!item?.status) return null;
+
+    const statusConfig = {
+      REGISTERED: { variant: 'info' as const, label: '등록됨' },
+      MATCHED: { variant: 'warning' as const, label: '매칭중' },
+      COMPLETED: { variant: 'success' as const, label: '회수완료' },
+      EXPIRED: { variant: 'default' as const, label: '만료됨' }
+    };
+
+    const config = statusConfig[item.status];
+    return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
   if (loading) {
@@ -83,20 +160,53 @@ const LostItemDetailPage = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50" style={{ maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="min-h-screen bg-gray-50">
       {/* 헤더 */}
-      <header className="bg-white shadow-sm">
-        <div className="max-w-3xl mx-auto px-8">
+      <header className="bg-white shadow-sm sticky top-0 z-10">
+        <div className="max-w-3xl mx-auto px-4 sm:px-8">
           <div className="flex justify-between items-center h-16">
             <Link to="/lost-items" className="flex items-center text-gray-600 hover:text-gray-900">
               <ArrowLeft className="w-5 h-5 mr-2" />
               목록으로
             </Link>
+
+            {/* 더보기 메뉴 (작성자만) */}
+            {isOwner && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowMenu(!showMenu)}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <MoreVertical className="w-5 h-5 text-gray-600" />
+                </button>
+
+                {showMenu && (
+                  <>
+                    <div 
+                      className="fixed inset-0 z-10" 
+                      onClick={() => setShowMenu(false)}
+                    />
+                    <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                      <button
+                        onClick={() => {
+                          setShowMenu(false);
+                          setShowDeleteModal(true);
+                        }}
+                        className="w-full px-4 py-2 text-left text-red-600 hover:bg-red-50 flex items-center"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        삭제하기
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-8 py-8">
+      <main className="max-w-3xl mx-auto px-4 sm:px-8 py-8">
         <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
           {/* 이미지 */}
           {item.imageUrl && (
@@ -109,9 +219,12 @@ const LostItemDetailPage = () => {
             </div>
           )}
 
-          <div className="p-8">
-            {/* 제목 */}
-            <h1 className="text-3xl font-bold text-gray-900 mb-4">{item.itemName}</h1>
+          <div className="p-6 sm:p-8">
+            {/* 제목과 상태 */}
+            <div className="flex items-start justify-between mb-4">
+              <h1 className="text-3xl font-bold text-gray-900 flex-1">{item.itemName}</h1>
+              {renderStatusBadge()}
+            </div>
 
             {/* 메타 정보 */}
             <div className="flex flex-wrap gap-4 mb-6 pb-6 border-b">
@@ -137,22 +250,106 @@ const LostItemDetailPage = () => {
               </p>
             </div>
 
-            {/* 액션 버튼 */}
-            {isAuthenticated && (
-              <div className="flex gap-4 pt-6 border-t">
-                <button
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            {/* 회수 요청 버튼 (작성자가 아닌 로그인 사용자만, 상태가 REGISTERED 또는 MATCHED일 때만) */}
+            {isAuthenticated && !isOwner && item.status && ['REGISTERED', 'MATCHED'].includes(item.status) && (
+              <div className="pt-6 border-t">
+                <Button
+                  variant="primary"
+                  size="lg"
+                  onClick={() => setShowClaimModal(true)}
+                  leftIcon={<Send className="w-5 h-5" />}
+                  className="w-full sm:w-auto"
                 >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  {deleting ? '삭제 중...' : '삭제하기'}
-                </button>
+                  회수 요청하기
+                </Button>
+                <p className="mt-2 text-sm text-gray-500">
+                  이 분실물이 본인의 것이라면 회수를 요청할 수 있습니다.
+                </p>
               </div>
             )}
           </div>
         </div>
       </main>
+
+      {/* 삭제 확인 모달 */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        title="분실물 삭제"
+        size="sm"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            정말로 이 분실물을 삭제하시겠습니까? 삭제된 분실물은 복구할 수 없습니다.
+          </p>
+          
+          <div className="flex justify-end space-x-3">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowDeleteModal(false)}
+              disabled={submitting}
+            >
+              취소
+            </Button>
+            <Button 
+              variant="error" 
+              onClick={handleDelete}
+              loading={submitting}
+              leftIcon={<Trash2 className="w-4 h-4" />}
+            >
+              삭제
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 회수 요청 모달 */}
+      <Modal
+        isOpen={showClaimModal}
+        onClose={() => {
+          setShowClaimModal(false);
+          setClaimMessage('');
+        }}
+        title="회수 요청"
+        size="md"
+      >
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            이 분실물을 회수하려는 이유를 간단히 설명해주세요.
+          </p>
+          
+          <textarea
+            placeholder="예: 제 지갑이 맞습니다. 안에 OO카드와 학생증이 있습니다."
+            value={claimMessage}
+            onChange={(e) => setClaimMessage(e.target.value)}
+            rows={4}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            disabled={submitting}
+          />
+          
+          <div className="flex justify-end space-x-3">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowClaimModal(false);
+                setClaimMessage('');
+              }}
+              disabled={submitting}
+            >
+              취소
+            </Button>
+            <Button 
+              variant="primary" 
+              onClick={handleClaimRequest}
+              loading={submitting}
+              disabled={!claimMessage.trim()}
+              leftIcon={<Send className="w-4 h-4" />}
+            >
+              요청 전송
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

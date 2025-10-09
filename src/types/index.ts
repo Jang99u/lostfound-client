@@ -10,29 +10,30 @@ export interface User {
 
 // 분실물 카테고리 (LostItem보다 먼저 정의)
 export const ITEM_CATEGORIES = {
-  ELECTRONICS: 'ELECTRONICS',
-  WALLET_CARD: 'WALLET_CARD',
-  CLOTHING: 'CLOTHING',
+  WALLET: 'WALLET',
+  PHONE: 'PHONE',
+  CARD: 'CARD',
   BAG: 'BAG',
-  DOCUMENT: 'DOCUMENT',
-  KEY: 'KEY',
+  CLOTHING: 'CLOTHING',
   ETC: 'ETC'
 } as const;
 
 export type ItemCategory = typeof ITEM_CATEGORIES[keyof typeof ITEM_CATEGORIES];
 
 export const ItemCategoryLabels: Record<ItemCategory, string> = {
-  [ITEM_CATEGORIES.ELECTRONICS]: '전자기기',
-  [ITEM_CATEGORIES.WALLET_CARD]: '지갑/카드',
-  [ITEM_CATEGORIES.CLOTHING]: '의류/액세서리',
-  [ITEM_CATEGORIES.BAG]: '가방/파우치',
-  [ITEM_CATEGORIES.DOCUMENT]: '신분증/서류',
-  [ITEM_CATEGORIES.KEY]: '열쇠/출입카드',
+  [ITEM_CATEGORIES.WALLET]: '지갑',
+  [ITEM_CATEGORIES.PHONE]: '휴대폰',
+  [ITEM_CATEGORIES.CARD]: '카드',
+  [ITEM_CATEGORIES.BAG]: '가방',
+  [ITEM_CATEGORIES.CLOTHING]: '의류',
   [ITEM_CATEGORIES.ETC]: '기타'
 };
 
 // 분실물 상태 타입
 export type LostItemStatus = 'REGISTERED' | 'MATCHED' | 'COMPLETED' | 'EXPIRED';
+
+// 회수 요청 상태 타입
+export type ClaimStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'COMPLETED';
 
 // 분실물 관련 타입
 export interface LostItem {
@@ -45,6 +46,32 @@ export interface LostItem {
   imageUrl?: string;
   embeddingId?: number;
   status?: LostItemStatus;
+  userId?: number;  // 작성자 ID
+}
+
+// 회수 요청 타입
+export interface ClaimRequest {
+  id: number;
+  lostItemId: number;
+  lostItemName: string;
+  claimerId: number;
+  claimerLoginId: string;
+  status: ClaimStatus;
+  message: string;
+  createdAt: string;
+}
+
+// 회수 요청 생성
+export interface CreateClaimRequest {
+  message: string;
+}
+
+// 통계 데이터
+export interface Statistics {
+  totalItems: number;
+  matchedItems: number;
+  completedItems: number;
+  newItemsToday: number;
 }
 
 // 인증 관련 타입
@@ -111,4 +138,7 @@ export interface SearchLostItemRequest {
 export interface MyPageData {
   user: User;
   lostItems: LostItem[];
+  totalCount: number;
+  receivedClaimRequests: ClaimRequest[];
+  pendingClaimCount: number;
 }

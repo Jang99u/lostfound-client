@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   Package, 
   Plus, 
@@ -25,22 +25,29 @@ import Modal from '../components/common/Modal';
 import { useAuth } from '../contexts/AuthContext';
 import { userApi } from '../apis/user';
 import { lostItemApi } from '../apis/lostItem';
-import type { MyPageData } from '../types';
+import { claimApi } from '../apis/claim';
+import type { MyPageData, ClaimRequest } from '../types';
 import { formatRelativeTime, formatNumber } from '../utils/cn';
 
-type TabType = 'all' | 'registered' | 'matched' | 'completed';
+type TabType = 'all' | 'registered' | 'matched' | 'completed' | 'claims' | 'sent-claims';
 type ViewMode = 'grid' | 'list';
 
 const MyPage = () => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const [searchParams] = useSearchParams();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  
+  // URL 파라미터에서 탭 읽기
+  const tabParam = searchParams.get('tab') as TabType | null;
   
   // 상태 관리
-  const [activeTab, setActiveTab] = useState<TabType>('all');
+  const [activeTab, setActiveTab] = useState<TabType>(tabParam || 'all');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
   const [myPageData, setMyPageData] = useState<MyPageData | null>(null);
+  const [sentClaimRequests, setSentClaimRequests] = useState<ClaimRequest[]>([]);
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<number | null>(null);
@@ -49,13 +56,15 @@ const MyPage = () => {
   const [stats, setStats] = useState({
     totalRegistered: 0,
     totalMatched: 0,
-    totalCompleted: 0,
-    successRate: 0
+    totalCompleted: 0
   });
 
   // 마이페이지 데이터 가져오기
   useEffect(() => {
     const fetchMyPageData = async () => {
+      // 인증 로딩 중이면 대기
+      if (authLoading) return;
+      
       if (!isAuthenticated) {
         navigate('/auth/login');
         return;
@@ -63,21 +72,24 @@ const MyPage = () => {
 
       try {
         setLoading(true);
-        const data = await userApi.getMyPage();
-        setMyPageData(data);
+        const [myPageResponse, sentClaimsResponse] = await Promise.all([
+          userApi.getMyPage(),
+          claimApi.getSentClaimRequests()
+        ]);
+        
+        setMyPageData(myPageResponse);
+        setSentClaimRequests(sentClaimsResponse);
         
         // 통계 계산 (안전하게 처리)
-        const lostItems = data.lostItems || [];
+        const lostItems = myPageResponse.lostItems || [];
         const totalRegistered = lostItems.length;
         const totalMatched = lostItems.filter(item => item.status === 'MATCHED').length;
         const totalCompleted = lostItems.filter(item => item.status === 'COMPLETED').length;
-        const successRate = totalRegistered > 0 ? Math.round((totalCompleted / totalRegistered) * 100) : 0;
         
         setStats({
           totalRegistered,
           totalMatched,
-          totalCompleted,
-          successRate
+          totalCompleted
         });
       } catch (err: any) {
         console.error('Failed to fetch mypage data:', err);
@@ -88,7 +100,14 @@ const MyPage = () => {
     };
 
     fetchMyPageData();
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, authLoading, navigate]);
+
+  // URL 파라미터 변경 시 탭 업데이트
+  useEffect(() => {
+    if (tabParam && ['all', 'registered', 'matched', 'completed', 'claims', 'sent-claims'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
   // 탭별 필터링된 아이템
   const getFilteredItems = () => {
@@ -117,9 +136,52 @@ const MyPage = () => {
       } : null);
       setShowDeleteModal(false);
       setItemToDelete(null);
+      // 성공 메시지는 표시하지 않음 (바로 사라짐으로 충분)
     } catch (err: any) {
       console.error('Failed to delete item:', err);
-      setError('삭제에 실패했습니다.');
+      // 실패 시에만 에러 메시지 표시
+      const errorMessage = err.response?.data?.message || '분실물 삭제에 실패했습니다. 다시 시도해주세요.';
+      setError(errorMessage);
+      setShowDeleteModal(false);
+      setItemToDelete(null);
+    }
+  };
+
+  // 회수 요청 승인
+  const handleApproveClaimRequest = async (claimId: number) => {
+    if (!confirm('이 회수 요청을 승인하시겠습니까?')) return;
+
+    setProcessing(true);
+    try {
+      await claimApi.approveClaimRequest(claimId);
+      // 데이터 새로고침
+      const data = await userApi.getMyPage();
+      setMyPageData(data);
+      alert('회수 요청이 승인되었습니다.');
+    } catch (err: any) {
+      console.error('Failed to approve claim request:', err);
+      alert('승인에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // 회수 요청 거절
+  const handleRejectClaimRequest = async (claimId: number) => {
+    if (!confirm('이 회수 요청을 거절하시겠습니까?')) return;
+
+    setProcessing(true);
+    try {
+      await claimApi.rejectClaimRequest(claimId);
+      // 데이터 새로고침
+      const data = await userApi.getMyPage();
+      setMyPageData(data);
+      alert('회수 요청이 거절되었습니다.');
+    } catch (err: any) {
+      console.error('Failed to reject claim request:', err);
+      alert('거절에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setProcessing(false);
     }
   };
 
@@ -161,6 +223,15 @@ const MyPage = () => {
   };
 
   const filteredItems = getFilteredItems();
+
+  // 인증 로딩 중
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
@@ -255,9 +326,9 @@ const MyPage = () => {
               <Bell className="w-8 h-8 text-purple-600" />
             </div>
             <div className="text-2xl font-bold text-gray-900 mb-1">
-              {stats.successRate}%
+              {formatNumber(myPageData?.pendingClaimCount || 0)}
             </div>
-            <div className="text-sm text-gray-600">성공률</div>
+            <div className="text-sm text-gray-600">대기중인 회수 요청</div>
           </Card>
         </div>
       </div>
@@ -272,7 +343,9 @@ const MyPage = () => {
                 { key: 'all', label: '전체', count: stats.totalRegistered },
                 { key: 'registered', label: '등록됨', count: stats.totalRegistered - stats.totalMatched - stats.totalCompleted },
                 { key: 'matched', label: '매칭중', count: stats.totalMatched },
-                { key: 'completed', label: '완료', count: stats.totalCompleted }
+                { key: 'completed', label: '완료', count: stats.totalCompleted },
+                { key: 'claims', label: '받은 회수 요청', count: myPageData?.receivedClaimRequests?.length || 0 },
+                { key: 'sent-claims', label: '보낸 회수 요청', count: sentClaimRequests.length }
               ].map((tab) => (
                 <button
                   key={tab.key}
@@ -342,6 +415,149 @@ const MyPage = () => {
               </Button>
             }
           />
+        ) : activeTab === 'claims' ? (
+          // 회수 요청 목록
+          <div className="space-y-4">
+            {myPageData?.receivedClaimRequests && myPageData.receivedClaimRequests.length > 0 ? (
+              myPageData.receivedClaimRequests.map((claim) => (
+                <Card key={claim.id} variant="elevated">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3 mb-2">
+                        <h3 className="text-lg font-semibold text-gray-900">
+                          {claim.lostItemName}
+                        </h3>
+                        <Badge 
+                          variant={
+                            claim.status === 'PENDING' ? 'warning' :
+                            claim.status === 'APPROVED' ? 'success' :
+                            claim.status === 'REJECTED' ? 'error' : 'default'
+                          }
+                        >
+                          {claim.status === 'PENDING' ? '대기중' :
+                           claim.status === 'APPROVED' ? '승인됨' :
+                           claim.status === 'REJECTED' ? '거절됨' : claim.status}
+                        </Badge>
+                      </div>
+                      
+                      <div className="text-sm text-gray-600 mb-3">
+                        <strong>요청자:</strong> {claim.claimerLoginId}
+                      </div>
+                      
+                      <div className="bg-gray-50 rounded-lg p-4 mb-3">
+                        <p className="text-sm font-medium text-gray-700 mb-2">요청 메시지:</p>
+                        <p className="text-gray-800">{claim.message}</p>
+                      </div>
+                      
+                      <div className="text-xs text-gray-500">
+                        {formatRelativeTime(claim.createdAt)}
+                      </div>
+                    </div>
+                    
+                    {claim.status === 'PENDING' && (
+                      <div className="flex flex-col space-y-2 ml-4">
+                        <Button
+                          variant="success"
+                          size="sm"
+                          onClick={() => handleApproveClaimRequest(claim.id)}
+                          disabled={processing}
+                          leftIcon={<CheckCircle className="w-4 h-4" />}
+                        >
+                          승인
+                        </Button>
+                        <Button
+                          variant="error"
+                          size="sm"
+                          onClick={() => handleRejectClaimRequest(claim.id)}
+                          disabled={processing}
+                          leftIcon={<AlertCircle className="w-4 h-4" />}
+                        >
+                          거절
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              ))
+            ) : (
+              <EmptyState
+                icon={<Bell className="w-16 h-16 text-gray-400" />}
+                title="받은 회수 요청이 없습니다"
+                description="아직 회수 요청이 없습니다."
+              />
+            )}
+          </div>
+        ) : activeTab === 'sent-claims' ? (
+          // 내가 보낸 회수 요청 목록
+          <div className="space-y-4">
+            {sentClaimRequests.length > 0 ? (
+              sentClaimRequests.map((claim) => (
+                <Card key={claim.id} variant="elevated">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-3 mb-2">
+                        <h3 className="text-lg font-semibold text-gray-900">
+                          {claim.lostItemName}
+                        </h3>
+                        <Badge 
+                          variant={
+                            claim.status === 'PENDING' ? 'warning' :
+                            claim.status === 'APPROVED' ? 'success' :
+                            claim.status === 'REJECTED' ? 'error' : 'default'
+                          }
+                        >
+                          {claim.status === 'PENDING' ? '대기중' :
+                           claim.status === 'APPROVED' ? '승인됨' :
+                           claim.status === 'REJECTED' ? '거절됨' : claim.status}
+                        </Badge>
+                      </div>
+                      
+                      <div className="bg-gray-50 rounded-lg p-4 mb-3">
+                        <p className="text-sm font-medium text-gray-700 mb-2">내가 보낸 메시지:</p>
+                        <p className="text-gray-800">{claim.message}</p>
+                      </div>
+                      
+                      <div className="text-xs text-gray-500">
+                        {formatRelativeTime(claim.createdAt)}
+                      </div>
+                      
+                      {claim.status === 'APPROVED' && (
+                        <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <p className="text-sm text-green-800">
+                            ✅ 회수 요청이 승인되었습니다! 습득자와 연락하여 회수를 진행해주세요.
+                          </p>
+                        </div>
+                      )}
+                      
+                      {claim.status === 'REJECTED' && (
+                        <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <p className="text-sm text-red-800">
+                            ❌ 회수 요청이 거절되었습니다.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="ml-4">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate(`/lost-items/${claim.lostItemId}`)}
+                      >
+                        게시글 보기
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ))
+            ) : (
+              <EmptyState
+                icon={<Bell className="w-16 h-16 text-gray-400" />}
+                title="보낸 회수 요청이 없습니다"
+                description="아직 회수 요청을 보내지 않았습니다."
+              />
+            )}
+          </div>
         ) : filteredItems.length === 0 ? (
           <EmptyState
             icon={<Package className="w-16 h-16 text-gray-400" />}

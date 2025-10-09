@@ -6,7 +6,8 @@ import type {
   PaginatedResponse,
   PaginationParams,
   ApiResponse,
-  ItemCategory
+  ItemCategory,
+  Statistics
 } from '../types';
 
 // 분실물 관련 API
@@ -100,5 +101,11 @@ export const lostItemApi = {
   // 분실물 삭제
   deleteLostItem: async (id: number): Promise<void> => {
     await apiClient.delete(`/api/v1/lost-items/${id}`);
+  },
+
+  // 통계 데이터 조회
+  getStatistics: async (): Promise<Statistics> => {
+    const response = await apiClient.get<ApiResponse<Statistics>>('/api/v1/statistics');
+    return response.data.data;
   }
 };
