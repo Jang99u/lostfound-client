@@ -36,8 +36,17 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       // 토큰 만료 시 로그아웃 처리
       localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
-      window.location.href = '/auth/login';
+      
+      // 현재 경로가 로그인이 필요한 페이지인지 확인
+      const publicPaths = ['/', '/lost-items', '/auth/login'];
+      const currentPath = window.location.pathname;
+      
+      // 로그인이 필요한 페이지(예: 마이페이지, 알림 등)일 때만 로그인 페이지로 리다이렉트
+      if (!publicPaths.includes(currentPath) && !currentPath.startsWith('/lost-items/')) {
+        window.location.href = '/auth/login';
+      }
     }
     return Promise.reject(error);
   }

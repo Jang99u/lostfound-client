@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Upload, 
   Camera, 
@@ -22,11 +22,14 @@ import { lostItemApi } from '../../apis/lostItem';
 import { ItemCategoryLabels } from '../../types';
 import type { ItemCategory, CreateLostItemRequest } from '../../types';
 import { formatDate } from '../../utils/cn';
+import { useAuth } from '../../contexts/AuthContext';
 
 type Step = 1 | 2 | 3 | 4;
 
 const CreateLostItemPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // 단계 관리
@@ -53,6 +56,24 @@ const CreateLostItemPage = () => {
     value: key,
     label
   }));
+
+  // 로그인 체크 - 페이지가 마운트될 때만 체크
+  useEffect(() => {
+    let mounted = true;
+    
+    const checkAuth = async () => {
+      // 로딩이 완료되고, 인증되지 않았고, 이 페이지에 있을 때만 리다이렉트
+      if (!authLoading && !isAuthenticated && location.pathname === '/lost-items/create' && mounted) {
+        navigate('/auth/login', { state: { from: '/lost-items/create' } });
+      }
+    };
+
+    checkAuth();
+    
+    return () => {
+      mounted = false;
+    };
+  }, [authLoading, isAuthenticated, navigate, location.pathname]);
 
   // 다음 단계로 이동
   const nextStep = () => {

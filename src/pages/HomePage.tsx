@@ -168,7 +168,7 @@ const HomePage = () => {
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      발견일
+                      습득일
                     </label>
                     <Input
                       type="date"
@@ -203,7 +203,7 @@ const HomePage = () => {
       </div>
 
       {/* 통계 섹션 */}
-      <div className="container mx-auto px-4 py-12">
+      <div className="container mx-auto px-4 py-3">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
           <Card variant="filled" className="text-center">
             <div className="flex items-center justify-center mb-2">
