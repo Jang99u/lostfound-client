@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { 
   Search, 
@@ -23,7 +23,7 @@ import Modal from '../../components/common/Modal';
 import { lostItemApi } from '../../apis/lostItem';
 import { ItemCategoryLabels } from '../../types';
 import type { ItemCategory, LostItem } from '../../types';
-import { formatRelativeTime, formatNumber, debounce } from '../../utils/cn';
+import { formatRelativeTime, formatNumber } from '../../utils/cn';
 
 type ViewMode = 'grid' | 'list';
 type SortOption = 'newest' | 'oldest' | 'location' | 'category';
@@ -51,42 +51,8 @@ const LostItemListPage = () => {
   const [endDate, setEndDate] = useState('');
   const [isSearchMode, setIsSearchMode] = useState(false);
 
-  // URL에서 초기 검색 파라미터 가져오기
-  useEffect(() => {
-    const state = location.state as any;
-    if (state) {
-      if (state.searchQuery) setSearchQuery(state.searchQuery);
-      if (state.category) setSelectedCategory(state.category);
-      if (state.location) setSelectedLocation(state.location);
-    }
-  }, [location.state]);
-
-  // 디바운스된 검색 함수
-  const debouncedSearch = debounce(async (query: string) => {
-    if (!query.trim()) {
-      fetchAllItems();
-      return;
-    }
-
-    setIsSearchMode(true);
-    setLoading(true);
-    setError('');
-
-    try {
-      const result = await lostItemApi.searchLostItems({ query, topK: 50 });
-      setItems(result.items || []);
-      setTotalCount(result.totalCount || 0);
-      setTotalPages(0); // 검색 결과는 페이징 없음
-    } catch (err: any) {
-      console.error('Search failed:', err);
-      setError('검색에 실패했습니다.');
-    } finally {
-      setLoading(false);
-    }
-  }, 500);
-
   // 전체 아이템 가져오기
-  const fetchAllItems = async (page: number = 0) => {
+  const fetchAllItems = useCallback(async (page: number = 0) => {
     setLoading(true);
     setError('');
     setIsSearchMode(false);
@@ -103,7 +69,33 @@ const LostItemListPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // 검색 실행
+  const performSearch = useCallback(async (query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) {
+      await fetchAllItems();
+      return;
+    }
+
+    setIsSearchMode(true);
+    setLoading(true);
+    setError('');
+
+    try {
+      const result = await lostItemApi.searchLostItems({ query: trimmed, topK: 50 });
+      setItems(result.items || []);
+      setTotalCount(result.totalCount || 0);
+      setTotalPages(0); // 검색 결과는 페이징 없음
+      setCurrentPage(0);
+    } catch (err: any) {
+      console.error('Search failed:', err);
+      setError('검색에 실패했습니다.');
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchAllItems]);
 
   // 필터 적용
   const applyFilters = async () => {
@@ -143,7 +135,7 @@ const LostItemListPage = () => {
     setSelectedLocation('');
     setStartDate('');
     setEndDate('');
-    fetchAllItems();
+    void fetchAllItems();
   };
 
   // 정렬 적용
@@ -164,18 +156,21 @@ const LostItemListPage = () => {
     }
   };
 
-  // 초기 로드
+  // 초기 로드 및 URL 상태 기반 검색 처리
   useEffect(() => {
-    fetchAllItems();
-  }, []);
-
-  // 검색어 변경 시 디바운스된 검색 실행
-  useEffect(() => {
-    debouncedSearch(searchQuery);
-  }, [searchQuery]);
+    const state = location.state as any;
+    if (state?.searchQuery) {
+      setSearchQuery(state.searchQuery);
+      void performSearch(state.searchQuery);
+    } else {
+      void fetchAllItems();
+    }
+    if (state?.category) setSelectedCategory(state.category);
+    if (state?.location) setSelectedLocation(state.location);
+  }, [location.state, fetchAllItems, performSearch]);
 
   // 정렬된 아이템
-  const sortedItems = applySorting(items);
+  const sortedItems = isSearchMode ? items : applySorting(items);
 
   // 카테고리 옵션
   const categoryOptions = Object.entries(ItemCategoryLabels).map(([key, label]) => ({
@@ -269,6 +264,12 @@ const LostItemListPage = () => {
                 placeholder="자연어로 검색해보세요 (예: 지하철에서 발견한 검은 지갑)"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    void performSearch(searchQuery);
+                  }
+                }}
                 leftIcon={<Search className="w-5 h-5" />}
                 className="pr-12"
               />
@@ -285,7 +286,7 @@ const LostItemListPage = () => {
             <Button
               variant="primary"
               leftIcon={<Sparkles className="w-4 h-4" />}
-              onClick={() => debouncedSearch(searchQuery)}
+              onClick={() => void performSearch(searchQuery)}
             >
               AI 검색
             </Button>
