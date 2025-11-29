@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { 
   Search, 
@@ -28,6 +28,11 @@ import { formatRelativeTime, formatNumber } from '../../utils/cn';
 type ViewMode = 'grid' | 'list';
 type SortOption = 'newest' | 'oldest' | 'location' | 'category';
 
+// 카테고리가 유효한지 확인하는 헬퍼 함수
+const isValidCategory = (category: ItemCategory | ''): category is ItemCategory => {
+  return category !== '' && category !== undefined;
+};
+
 const LostItemListPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -47,9 +52,33 @@ const LostItemListPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | ''>('');
   const [selectedLocation, setSelectedLocation] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [selectedBrand, setSelectedBrand] = useState('');
+  const [foundDateAfter, setFoundDateAfter] = useState('');
   const [isSearchMode, setIsSearchMode] = useState(false);
+  
+  // 필터 모달용 임시 상태
+  const [tempCategory, setTempCategory] = useState<ItemCategory | ''>('');
+  const [tempLocation, setTempLocation] = useState('');
+  const [tempBrand, setTempBrand] = useState('');
+  const [tempFoundDateAfter, setTempFoundDateAfter] = useState('');
+  
+  // 필터 상태를 ref로 저장하여 최신 값 참조
+  const filterStateRef = useRef({
+    selectedCategory,
+    selectedLocation,
+    selectedBrand,
+    foundDateAfter
+  });
+  
+  // 필터 상태가 변경될 때마다 ref 업데이트
+  useEffect(() => {
+    filterStateRef.current = {
+      selectedCategory,
+      selectedLocation,
+      selectedBrand,
+      foundDateAfter
+    };
+  }, [selectedCategory, selectedLocation, selectedBrand, foundDateAfter]);
 
   // 전체 아이템 가져오기
   const fetchAllItems = useCallback(async (page: number = 0) => {
@@ -71,8 +100,16 @@ const LostItemListPage = () => {
     }
   }, []);
 
-  // 검색 실행
-  const performSearch = useCallback(async (query: string) => {
+  // 검색 실행 (필터와 함께)
+  const performSearch = useCallback(async (
+    query: string,
+    filters?: {
+      category?: ItemCategory | '';
+      location?: string;
+      brand?: string;
+      foundDateAfter?: string;
+    }
+  ) => {
     const trimmed = query.trim();
     if (!trimmed) {
       await fetchAllItems();
@@ -84,7 +121,36 @@ const LostItemListPage = () => {
     setError('');
 
     try {
-      const result = await lostItemApi.searchLostItems({ query: trimmed, topK: 50 });
+      // 파라미터로 받은 필터 값이 있으면 사용, 없으면 상태 값 사용
+      // 빈 문자열을 undefined로 변환
+      const categoryValue = filters?.category !== undefined 
+        ? (isValidCategory(filters.category) ? filters.category : undefined)
+        : (isValidCategory(selectedCategory) ? selectedCategory : undefined);
+      const locationValue = filters?.location !== undefined 
+        ? (filters.location.trim() || undefined)
+        : (selectedLocation.trim() || undefined);
+      const brandValue = filters?.brand !== undefined 
+        ? (filters.brand.trim() || undefined)
+        : (selectedBrand.trim() || undefined);
+      const foundDateValue = filters?.foundDateAfter !== undefined 
+        ? (filters.foundDateAfter || undefined)
+        : (foundDateAfter || undefined);
+
+      // 필터가 있으면 필터와 함께 검색
+      const hasFilters = categoryValue || locationValue || brandValue || foundDateValue;
+      const searchRequest: any = { 
+        query: trimmed, 
+        topK: 50 
+      };
+      
+      if (hasFilters) {
+        searchRequest.category = categoryValue;
+        searchRequest.location = locationValue;
+        searchRequest.brand = brandValue;
+        searchRequest.foundDateAfter = foundDateValue;
+      }
+      
+      const result = await lostItemApi.searchLostItems(searchRequest);
       setItems(result.items || []);
       setTotalCount(result.totalCount || 0);
       setTotalPages(0); // 검색 결과는 페이징 없음
@@ -95,47 +161,117 @@ const LostItemListPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [fetchAllItems]);
+  }, [fetchAllItems, selectedCategory, selectedLocation, selectedBrand, foundDateAfter]);
 
-  // 필터 적용
-  const applyFilters = async () => {
+  // 필터 적용 (여러 필터 동시 적용)
+  const applyFilters = useCallback(async (
+    page: number = 0,
+    filters?: {
+      category?: ItemCategory | '';
+      location?: string;
+      brand?: string;
+      foundDateAfter?: string;
+    }
+  ) => {
     setLoading(true);
     setError('');
     setIsSearchMode(false);
 
     try {
-      let result;
+      // 파라미터로 받은 필터 값이 있으면 사용, 없으면 상태 값 사용
+      // filters 파라미터가 있으면 그것을 우선 사용 (상태 업데이트 타이밍 문제 방지)
+      let categoryValue: ItemCategory | undefined;
+      let locationValue: string | undefined;
+      let brandValue: string | undefined;
+      let foundDateValue: string | undefined;
       
-      if (selectedCategory) {
-        result = await lostItemApi.getLostItemsByCategory(selectedCategory, { page: 0, size: 20 });
-      } else if (selectedLocation) {
-        result = await lostItemApi.getLostItemsByLocation(selectedLocation, { page: 0, size: 20 });
-      } else if (startDate && endDate) {
-        result = await lostItemApi.getLostItemsByDateRange(startDate, endDate, { page: 0, size: 20 });
+      if (filters) {
+        // filters 파라미터가 있으면 그것을 사용
+        categoryValue = filters.category && isValidCategory(filters.category) ? filters.category : undefined;
+        locationValue = filters.location?.trim() || undefined;
+        brandValue = filters.brand?.trim() || undefined;
+        foundDateValue = filters.foundDateAfter || undefined;
       } else {
-        result = await lostItemApi.getAllLostItems({ page: 0, size: 20 });
+        // filters 파라미터가 없으면 ref의 최신 상태 값 사용
+        const currentState = filterStateRef.current;
+        categoryValue = isValidCategory(currentState.selectedCategory) ? currentState.selectedCategory : undefined;
+        locationValue = currentState.selectedLocation.trim() || undefined;
+        brandValue = currentState.selectedBrand.trim() || undefined;
+        foundDateValue = currentState.foundDateAfter || undefined;
+      }
+
+      // 필터가 하나라도 있으면 통합 필터링 API 사용
+      const hasFilters = categoryValue || locationValue || brandValue || foundDateValue;
+      
+      let result;
+      if (hasFilters) {
+        result = await lostItemApi.filterLostItems({
+          category: categoryValue,
+          location: locationValue,
+          brand: brandValue,
+          foundDateAfter: foundDateValue,
+          page,
+          size: 20
+        });
+      } else {
+        result = await lostItemApi.getAllLostItems({ page, size: 20 });
       }
 
       setItems(result.items || []);
       setTotalCount(result.totalCount || 0);
       setTotalPages(Math.ceil((result.totalCount || 0) / 20));
-      setCurrentPage(0);
+      setCurrentPage(page);
     } catch (err: any) {
       console.error('Filter failed:', err);
       setError('필터 적용에 실패했습니다.');
     } finally {
       setLoading(false);
     }
-  };
+    // filterStateRef를 사용하므로 의존성 배열 비워도 됨
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 필터 초기화
   const clearFilters = () => {
     setSearchQuery('');
     setSelectedCategory('');
     setSelectedLocation('');
-    setStartDate('');
-    setEndDate('');
+    setSelectedBrand('');
+    setFoundDateAfter('');
+    // 임시 상태도 초기화
+    setTempCategory('');
+    setTempLocation('');
+    setTempBrand('');
+    setTempFoundDateAfter('');
     void fetchAllItems();
+  };
+  
+  // 필터 모달 열 때 현재 필터 상태를 임시 상태로 복사
+  const handleOpenFilters = () => {
+    setTempCategory(selectedCategory);
+    setTempLocation(selectedLocation);
+    setTempBrand(selectedBrand);
+    setTempFoundDateAfter(foundDateAfter);
+    setShowFilters(true);
+  };
+  
+  // 필터 적용 버튼 클릭 시
+  const handleApplyFilters = async () => {
+    // 상태 업데이트 (UI 반영용)
+    setSelectedCategory(tempCategory);
+    setSelectedLocation(tempLocation);
+    setSelectedBrand(tempBrand);
+    setFoundDateAfter(tempFoundDateAfter);
+    setShowFilters(false);
+    
+    // 필터 적용 - 필터 값을 직접 전달하여 상태 업데이트 타이밍 문제 방지
+    // applyFilters 내부에서 빈 문자열을 undefined로 변환하므로 그대로 전달
+    await applyFilters(0, {
+      category: tempCategory,
+      location: tempLocation,
+      brand: tempBrand,
+      foundDateAfter: tempFoundDateAfter
+    });
   };
 
   // 정렬 적용
@@ -159,15 +295,117 @@ const LostItemListPage = () => {
   // 초기 로드 및 URL 상태 기반 검색 처리
   useEffect(() => {
     const state = location.state as any;
+    
+    // state가 없으면 초기 로드만 수행
+    if (!state) {
+      void fetchAllItems();
+      return;
+    }
+    
     if (state?.searchQuery) {
       setSearchQuery(state.searchQuery);
-      void performSearch(state.searchQuery);
+      // 검색어와 필터를 함께 전달
+      const searchFilters = {
+        category: state?.category,
+        location: state?.location,
+        brand: state?.brand,
+        foundDateAfter: state?.foundDate
+      };
+      
+      // performSearch는 내부에서 필터 값을 사용하므로 직접 호출
+      setIsSearchMode(true);
+      setLoading(true);
+      setError('');
+      
+      const trimmed = state.searchQuery.trim();
+      if (trimmed) {
+        const categoryValue = isValidCategory(searchFilters.category) ? searchFilters.category : undefined;
+        const locationValue = searchFilters.location?.trim() || undefined;
+        const brandValue = searchFilters.brand?.trim() || undefined;
+        const foundDateValue = searchFilters.foundDateAfter || undefined;
+        
+        const hasFilters = categoryValue || locationValue || brandValue || foundDateValue;
+        const searchRequest: any = { 
+          query: trimmed, 
+          topK: 50 
+        };
+        
+        if (hasFilters) {
+          searchRequest.category = categoryValue;
+          searchRequest.location = locationValue;
+          searchRequest.brand = brandValue;
+          searchRequest.foundDateAfter = foundDateValue;
+        }
+        
+        lostItemApi.searchLostItems(searchRequest)
+          .then(result => {
+            setItems(result.items || []);
+            setTotalCount(result.totalCount || 0);
+            setTotalPages(0);
+            setCurrentPage(0);
+          })
+          .catch(err => {
+            console.error('Search failed:', err);
+            setError('검색에 실패했습니다.');
+          })
+          .finally(() => {
+            setLoading(false);
+          });
+      }
     } else {
-      void fetchAllItems();
+      // 필터가 있으면 필터 적용, 없으면 전체 조회
+      if (state?.category || state?.location || state?.brand || state?.foundDate) {
+        // 상태 업데이트
+        if (state?.category) setSelectedCategory(state.category);
+        if (state?.location) setSelectedLocation(state.location);
+        if (state?.brand) setSelectedBrand(state.brand);
+        if (state?.foundDate) {
+          setFoundDateAfter(state.foundDate);
+        }
+        
+        // 필터 적용 - state 값을 직접 전달하여 즉시 적용
+        const categoryValue = isValidCategory(state?.category) ? state.category : undefined;
+        const locationValue = state?.location?.trim() || undefined;
+        const brandValue = state?.brand?.trim() || undefined;
+        const foundDateValue = state?.foundDate || undefined;
+        
+        const hasFilters = categoryValue || locationValue || brandValue || foundDateValue;
+        
+        if (hasFilters) {
+          setLoading(true);
+          setError('');
+          setIsSearchMode(false);
+          
+          lostItemApi.filterLostItems({
+            category: categoryValue,
+            location: locationValue,
+            brand: brandValue,
+            foundDateAfter: foundDateValue,
+            page: 0,
+            size: 20
+          })
+            .then(result => {
+              setItems(result.items || []);
+              setTotalCount(result.totalCount || 0);
+              setTotalPages(Math.ceil((result.totalCount || 0) / 20));
+              setCurrentPage(0);
+            })
+            .catch(err => {
+              console.error('Filter failed:', err);
+              setError('필터 적용에 실패했습니다.');
+            })
+            .finally(() => {
+              setLoading(false);
+            });
+        } else {
+          void fetchAllItems();
+        }
+      } else {
+        void fetchAllItems();
+      }
     }
-    if (state?.category) setSelectedCategory(state.category);
-    if (state?.location) setSelectedLocation(state.location);
-  }, [location.state, fetchAllItems, performSearch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state]);
 
   // 정렬된 아이템
   const sortedItems = isSearchMode ? items : applySorting(items);
@@ -180,10 +418,10 @@ const LostItemListPage = () => {
 
   // 활성 필터 개수
   const activeFiltersCount = [
-    selectedCategory,
-    selectedLocation,
-    startDate,
-    endDate
+    isValidCategory(selectedCategory) ? selectedCategory : null,
+    selectedLocation.trim(),
+    selectedBrand.trim(),
+    foundDateAfter
   ].filter(Boolean).length;
 
   return (
@@ -240,7 +478,7 @@ const LostItemListPage = () => {
                 variant="outline"
                 size="sm"
                 leftIcon={<Filter className="w-4 h-4" />}
-                onClick={() => setShowFilters(true)}
+                onClick={handleOpenFilters}
               >
                 필터
                 {activeFiltersCount > 0 && (
@@ -367,11 +605,11 @@ const LostItemListPage = () => {
                       </div>
                       
                       <div className="space-y-3">
-                        <div className="flex items-start justify-between">
-                          <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors line-clamp-2 flex-1">
                             {item.itemName}
                           </h3>
-                          <Badge variant="info" size="sm">
+                          <Badge variant="outline" size="sm" className="flex-shrink-0 font-semibold border-blue-300 text-blue-700 bg-blue-50">
                             {ItemCategoryLabels[item.category]}
                           </Badge>
                         </div>
@@ -412,11 +650,11 @@ const LostItemListPage = () => {
                       </div>
                       
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between mb-2">
-                          <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
+                        <div className="flex items-start justify-between mb-2 gap-2">
+                          <h3 className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors flex-1">
                             {item.itemName}
                           </h3>
-                          <Badge variant="info" size="sm">
+                          <Badge variant="outline" size="sm" className="flex-shrink-0 font-semibold border-blue-300 text-blue-700 bg-blue-50">
                             {ItemCategoryLabels[item.category]}
                           </Badge>
                         </div>
@@ -452,7 +690,14 @@ const LostItemListPage = () => {
                     variant="outline"
                     size="sm"
                     disabled={currentPage === 0}
-                    onClick={() => fetchAllItems(currentPage - 1)}
+                    onClick={() => {
+                      const hasFilters = isValidCategory(selectedCategory) || selectedLocation.trim() || selectedBrand.trim() || foundDateAfter;
+                      if (hasFilters) {
+                        void applyFilters(currentPage - 1);
+                      } else {
+                        void fetchAllItems(currentPage - 1);
+                      }
+                    }}
                   >
                     이전
                   </Button>
@@ -463,7 +708,14 @@ const LostItemListPage = () => {
                       return (
                         <button
                           key={page}
-                          onClick={() => fetchAllItems(page)}
+                          onClick={() => {
+                            const hasFilters = isValidCategory(selectedCategory) || selectedLocation.trim() || selectedBrand.trim() || foundDateAfter;
+                            if (hasFilters) {
+                              void applyFilters(page);
+                            } else {
+                              void fetchAllItems(page);
+                            }
+                          }}
                           className={`px-3 py-1 text-sm rounded ${
                             currentPage === page
                               ? 'bg-blue-600 text-white'
@@ -480,7 +732,14 @@ const LostItemListPage = () => {
                     variant="outline"
                     size="sm"
                     disabled={currentPage >= totalPages - 1}
-                    onClick={() => fetchAllItems(currentPage + 1)}
+                    onClick={() => {
+                      const hasFilters = isValidCategory(selectedCategory) || selectedLocation.trim() || selectedBrand.trim() || foundDateAfter;
+                      if (hasFilters) {
+                        void applyFilters(currentPage + 1);
+                      } else {
+                        void fetchAllItems(currentPage + 1);
+                      }
+                    }}
                   >
                     다음
                   </Button>
@@ -494,7 +753,14 @@ const LostItemListPage = () => {
       {/* 필터 모달 */}
       <Modal
         isOpen={showFilters}
-        onClose={() => setShowFilters(false)}
+        onClose={() => {
+          // 모달 닫을 때 임시 상태를 현재 상태로 되돌림
+          setTempCategory(selectedCategory);
+          setTempLocation(selectedLocation);
+          setTempBrand(selectedBrand);
+          setTempFoundDateAfter(foundDateAfter);
+          setShowFilters(false);
+        }}
         title="필터 옵션"
         size="md"
       >
@@ -505,9 +771,9 @@ const LostItemListPage = () => {
               카테고리
             </label>
             <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value as ItemCategory)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={tempCategory}
+              onChange={(e) => setTempCategory(e.target.value as ItemCategory)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             >
               <option value="">전체 카테고리</option>
               {categoryOptions.map((option) => (
@@ -526,49 +792,55 @@ const LostItemListPage = () => {
             <Input
               type="text"
               placeholder="예: 강남역, 홍대입구역"
-              value={selectedLocation}
-              onChange={(e) => setSelectedLocation(e.target.value)}
+              value={tempLocation}
+              onChange={(e) => setTempLocation(e.target.value)}
               leftIcon={<MapPin className="w-4 h-4" />}
             />
           </div>
 
-          {/* 날짜 범위 필터 */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                시작 날짜
-              </label>
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                leftIcon={<Calendar className="w-4 h-4" />}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                종료 날짜
-              </label>
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                leftIcon={<Calendar className="w-4 h-4" />}
-              />
-            </div>
+          {/* 브랜드 필터 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              브랜드
+            </label>
+            <Input
+              type="text"
+              placeholder="예: 나이키, 애플"
+              value={tempBrand}
+              onChange={(e) => setTempBrand(e.target.value)}
+              leftIcon={<Package className="w-4 h-4" />}
+            />
+          </div>
+
+          {/* 날짜 필터 (습득일 이후) */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              습득일 이후
+            </label>
+            <Input
+              type="date"
+              value={tempFoundDateAfter}
+              onChange={(e) => setTempFoundDateAfter(e.target.value)}
+              leftIcon={<Calendar className="w-4 h-4" />}
+            />
           </div>
 
           {/* 액션 버튼들 */}
           <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
-            <Button variant="outline" onClick={clearFilters}>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setTempCategory('');
+                setTempLocation('');
+                setTempBrand('');
+                setTempFoundDateAfter('');
+              }}
+            >
               초기화
             </Button>
             <Button 
               variant="primary" 
-              onClick={() => {
-                applyFilters();
-                setShowFilters(false);
-              }}
+              onClick={handleApplyFilters}
             >
               필터 적용
             </Button>

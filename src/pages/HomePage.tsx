@@ -23,9 +23,12 @@ import Input from '../components/common/Input';
 import Badge from '../components/common/Badge';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
+import TmapSelector from '../components/common/TmapSelector';
 import { lostItemApi } from '../apis/lostItem';
+import { custodyLocationApi } from '../apis/custodyLocation';
 import { ItemCategoryLabels } from '../types';
 import type { ItemCategory } from '../types';
+import type { CustodyLocation } from '../apis/custodyLocation';
 import { formatRelativeTime, formatNumber } from '../utils/cn';
 
 const HomePage = () => {
@@ -33,6 +36,8 @@ const HomePage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | ''>('');
   const [selectedLocation, setSelectedLocation] = useState('');
+  const [selectedBrand, setSelectedBrand] = useState('');
+  const [selectedFoundDate, setSelectedFoundDate] = useState('');
   const [recentItems, setRecentItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -41,6 +46,33 @@ const HomePage = () => {
     newItemsToday: 0,
     successRate: 0
   });
+  const [selectedPoint, setSelectedPoint] = useState<{ lat: number; lon: number } | null>(null);
+  const [topK, setTopK] = useState(10);
+  const [nearbyLocations, setNearbyLocations] = useState<CustodyLocation[]>([]);
+  const [loadingNearby, setLoadingNearby] = useState(false);
+
+  // 가까운 보관소 검색 (지도에서 선택한 위치 기반)
+  useEffect(() => {
+    const fetchNearbyLocations = async () => {
+      if (!selectedPoint) return;
+
+      setLoadingNearby(true);
+      try {
+        const locations = await custodyLocationApi.findNearbyCustodyLocations({
+          latitude: selectedPoint.lat,
+          longitude: selectedPoint.lon,
+          topK: topK
+        });
+        setNearbyLocations(locations);
+      } catch (error) {
+        console.error('Failed to fetch nearby locations:', error);
+      } finally {
+        setLoadingNearby(false);
+      }
+    };
+
+    fetchNearbyLocations();
+  }, [selectedPoint, topK]);
 
   // 최근 등록된 분실물 및 통계 가져오기
   useEffect(() => {
@@ -74,13 +106,15 @@ const HomePage = () => {
   // 검색 실행
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchQuery.trim()) return;
     
+    // 검색어가 있으면 AI 검색, 없으면 필터만 적용
     navigate('/lost-items', { 
       state: { 
-        searchQuery, 
-        category: selectedCategory, 
-        location: selectedLocation 
+        searchQuery: searchQuery.trim() || undefined, 
+        category: selectedCategory && selectedCategory !== '' ? selectedCategory : undefined, 
+        location: selectedLocation.trim() || undefined,
+        brand: selectedBrand.trim() || undefined,
+        foundDate: selectedFoundDate || undefined
       } 
     });
   };
@@ -134,7 +168,7 @@ const HomePage = () => {
                 </div>
 
                 {/* 필터 옵션 */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       카테고리
@@ -168,10 +202,25 @@ const HomePage = () => {
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      습득일
+                      브랜드
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="예: 나이키, 구찌"
+                      value={selectedBrand}
+                      onChange={(e) => setSelectedBrand(e.target.value)}
+                      leftIcon={<Package className="w-4 h-4" />}
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      습득일 이후
                     </label>
                     <Input
                       type="date"
+                      value={selectedFoundDate}
+                      onChange={(e) => setSelectedFoundDate(e.target.value)}
                       leftIcon={<Calendar className="w-4 h-4" />}
                     />
                   </div>
@@ -200,6 +249,108 @@ const HomePage = () => {
             </Card>
           </div>
         </div>
+      </div>
+
+      {/* 가까운 보관소 섹션 */}
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-6">
+          <div className="mb-4">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              가까운 보관소 찾기
+            </h2>
+            <p className="text-gray-600">
+              지도를 클릭하여 분실물이 있을 것으로 예상되는 위치를 지정하세요.
+            </p>
+          </div>
+
+          <Card variant="filled" className="mb-6 p-4 space-y-4">
+            <TmapSelector
+              latitude={selectedPoint?.lat}
+              longitude={selectedPoint?.lon}
+              onLocationSelect={(lat, lon) => setSelectedPoint({ lat, lon })}
+              height="360px"
+            />
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  상위 개수 (TopK)
+                </label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="50"
+                  placeholder="10"
+                  value={topK.toString()}
+                  onChange={(e) => setTopK(parseInt(e.target.value, 10) || 10)}
+                  leftIcon={<Package className="w-4 h-4" />}
+                />
+              </div>
+            </div>
+
+            {selectedPoint ? (
+              <div className="text-sm text-gray-600">
+                선택된 위치: 위도 {selectedPoint.lat.toFixed(6)}, 경도 {selectedPoint.lon.toFixed(6)}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500">
+                보관소를 검색하려면 지도를 클릭하여 위치를 선택하세요.
+              </div>
+            )}
+          </Card>
+        </div>
+          
+        {loadingNearby ? (
+          <div className="flex justify-center py-8">
+            <LoadingSpinner size="lg" />
+            <span className="ml-3 text-gray-600">보관소 거리 계산 중...</span>
+          </div>
+        ) : nearbyLocations.length > 0 ? (
+          <>
+            <div className="mb-4 text-sm text-gray-600">
+              총 {nearbyLocations.length}개의 가까운 보관소를 찾았습니다.
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-12">
+              {nearbyLocations.map((location, index) => (
+                <Card key={location.id} variant="filled" className="hover-lift">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="info" size="sm">
+                        {index + 1}위
+                      </Badge>
+                      <h3 className="font-semibold text-gray-900 text-lg">
+                        {location.name}
+                      </h3>
+                    </div>
+                    <Badge variant="info" size="sm">
+                      {location.itemCount}개
+                    </Badge>
+                  </div>
+                  
+                  {location.walkingDistance && location.walkingTime && (
+                    <div className="space-y-2 text-sm text-gray-600">
+                      <div className="flex items-center">
+                        <MapPin className="w-4 h-4 mr-2" />
+                        도보 {Math.round(location.walkingTime)}분 ({Math.round(location.walkingDistance / 1000 * 10) / 10}km)
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        위도: {location.latitude.toFixed(6)}, 경도: {location.longitude.toFixed(6)}
+                      </div>
+                    </div>
+                  )}
+                </Card>
+              ))}
+            </div>
+          </>
+        ) : selectedPoint ? (
+          <div className="text-center py-8 text-gray-500">
+            주변 보관소를 찾을 수 없습니다.
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            지도를 클릭하여 검색 위치를 선택하세요.
+          </div>
+        )}
       </div>
 
       {/* 통계 섹션 */}

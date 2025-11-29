@@ -43,6 +43,9 @@ export interface LostItem {
   description: string;
   foundDate: string;
   location: string;
+  latitude?: number;
+  longitude?: number;
+  brand?: string;
   imageUrl?: string;
   embeddingId?: number;
   status?: LostItemStatus;
@@ -114,8 +117,8 @@ export interface PaginatedResponse<T> {
 export interface LostItemFilters {
   category?: ItemCategory;
   location?: string;
-  startDate?: string;
-  endDate?: string;
+  brand?: string;
+  foundDateAfter?: string;  // 해당 날짜 이후
 }
 
 // 분실물 등록 요청 타입
@@ -125,6 +128,9 @@ export interface CreateLostItemRequest {
   description: string;
   foundDate: string;
   location: string;
+  latitude?: number;
+  longitude?: number;
+  brand?: string;
   image?: File;
 }
 
@@ -132,6 +138,10 @@ export interface CreateLostItemRequest {
 export interface SearchLostItemRequest {
   query: string;
   topK?: number;
+  category?: ItemCategory;
+  location?: string;
+  brand?: string;
+  foundDateAfter?: string;
 }
 
 // 마이페이지 타입

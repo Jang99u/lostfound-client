@@ -19,8 +19,10 @@ import Button from '../../components/common/Button';
 import Input from '../../components/common/Input';
 import Badge from '../../components/common/Badge';
 import { lostItemApi } from '../../apis/lostItem';
+import { custodyLocationApi } from '../../apis/custodyLocation';
 import { ItemCategoryLabels } from '../../types';
 import type { ItemCategory, CreateLostItemRequest } from '../../types';
+import type { CustodyLocation } from '../../apis/custodyLocation';
 import { formatDate } from '../../utils/cn';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -45,8 +47,15 @@ const CreateLostItemPage = () => {
     category: '' as ItemCategory | '',
     description: '',
     foundDate: '',
-    location: ''
+    location: '',
+    latitude: undefined as number | undefined,
+    longitude: undefined as number | undefined,
+    selectedCustodyLocationId: null as number | null
   });
+
+  // 보관장소 목록
+  const [custodyLocations, setCustodyLocations] = useState<CustodyLocation[]>([]);
+  const [loadingLocations, setLoadingLocations] = useState(false);
 
   // 단계별 완료 상태
   const [completedSteps, setCompletedSteps] = useState<Set<Step>>(new Set());
@@ -56,6 +65,23 @@ const CreateLostItemPage = () => {
     value: key,
     label
   }));
+
+  // 보관장소 목록 불러오기
+  useEffect(() => {
+    const fetchCustodyLocations = async () => {
+      setLoadingLocations(true);
+      try {
+        const locations = await custodyLocationApi.getAllCustodyLocations();
+        setCustodyLocations(locations);
+      } catch (error) {
+        console.error('Failed to fetch custody locations:', error);
+      } finally {
+        setLoadingLocations(false);
+      }
+    };
+
+    fetchCustodyLocations();
+  }, []);
 
   // 로그인 체크 - 페이지가 마운트될 때만 체크
   useEffect(() => {
@@ -74,6 +100,31 @@ const CreateLostItemPage = () => {
       mounted = false;
     };
   }, [authLoading, isAuthenticated, navigate, location.pathname]);
+
+  // 보관장소 선택 핸들러
+  const handleCustodyLocationChange = (locationId: number | '') => {
+    if (locationId === '') {
+      setFormData(prev => ({
+        ...prev,
+        selectedCustodyLocationId: null,
+        location: '',
+        latitude: undefined,
+        longitude: undefined
+      }));
+      return;
+    }
+
+    const selectedLocation = custodyLocations.find((loc) => loc.id === locationId);
+    if (selectedLocation) {
+      setFormData(prev => ({
+        ...prev,
+        selectedCustodyLocationId: locationId as number,
+        location: selectedLocation.name,
+        latitude: selectedLocation.latitude,
+        longitude: selectedLocation.longitude
+      }));
+    }
+  };
 
   // 다음 단계로 이동
   const nextStep = () => {
@@ -104,7 +155,7 @@ const CreateLostItemPage = () => {
 
   // 폼 제출
   const handleSubmit = async () => {
-    if (!formData.image || !formData.itemName || !formData.category || !formData.location || !formData.foundDate) {
+    if (!formData.image || !formData.itemName || !formData.category || !formData.location || !formData.foundDate || !formData.selectedCustodyLocationId) {
       setError('모든 필수 항목을 입력해주세요.');
       return;
     }
@@ -119,6 +170,8 @@ const CreateLostItemPage = () => {
         description: formData.description,
         foundDate: formData.foundDate,
         location: formData.location,
+        latitude: formData.latitude,
+        longitude: formData.longitude,
         image: formData.image
       };
 
@@ -273,13 +326,32 @@ const CreateLostItemPage = () => {
             </div>
 
             <div className="space-y-4 flex-1 overflow-y-auto w-full">
-              <Input
-                label="발견 장소 *"
-                placeholder="예: 강남역 2번 출구, 홍대입구역 대합실"
-                value={formData.location}
-                onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                leftIcon={<MapPin className="w-4 h-4" />}
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  보관 장소 선택 *
+                </label>
+                {loadingLocations ? (
+                  <div className="text-sm text-gray-500">보관장소 목록을 불러오는 중...</div>
+                ) : (
+                  <select
+                    value={formData.selectedCustodyLocationId || ''}
+                    onChange={(e) => handleCustodyLocationChange(e.target.value ? Number(e.target.value) : '')}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">보관 장소를 선택하세요</option>
+                    {custodyLocations.map((loc) => (
+                      <option key={loc.id} value={loc.id}>
+                        {loc.name} ({loc.itemCount}개 보관 중)
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {formData.selectedCustodyLocationId && formData.latitude && formData.longitude && (
+                  <div className="mt-2 text-xs text-gray-500">
+                    위치: 위도 {formData.latitude.toFixed(6)}, 경도 {formData.longitude.toFixed(6)}
+                  </div>
+                )}
+              </div>
 
               <Input
                 label="발견 날짜 *"
@@ -355,7 +427,7 @@ const CreateLostItemPage = () => {
                         </Badge>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-600">발견 장소:</span>
+                        <span className="text-gray-600">보관 장소:</span>
                         <span className="font-medium">{formData.location}</span>
                       </div>
                       <div className="flex justify-between">

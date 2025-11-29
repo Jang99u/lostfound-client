@@ -21,6 +21,18 @@ export const lostItemApi = {
     formData.append('foundDate', itemData.foundDate);
     formData.append('location', itemData.location);
     
+    if (itemData.latitude !== undefined && itemData.latitude !== null) {
+      formData.append('latitude', itemData.latitude.toString());
+    }
+    
+    if (itemData.longitude !== undefined && itemData.longitude !== null) {
+      formData.append('longitude', itemData.longitude.toString());
+    }
+    
+    if (itemData.brand) {
+      formData.append('brand', itemData.brand);
+    }
+    
     if (itemData.image) {
       formData.append('image', itemData.image);
     }
@@ -85,6 +97,31 @@ export const lostItemApi = {
   ): Promise<PaginatedResponse<LostItem>> => {
     const response = await apiClient.get<ApiResponse<PaginatedResponse<LostItem>>>(
       `/api/v1/lost-items/location?location=${encodeURIComponent(location)}&page=${pagination.page}&size=${pagination.size}`
+    );
+    return response.data.data;
+  },
+
+  // 통합 필터링 (카테고리, 장소, 브랜드, 날짜 이후를 동시에 적용)
+  filterLostItems: async (
+    filters: {
+      category?: ItemCategory;
+      location?: string;
+      brand?: string;
+      foundDateAfter?: string;  // 해당 날짜 이후
+      page?: number;
+      size?: number;
+    }
+  ): Promise<PaginatedResponse<LostItem>> => {
+    const response = await apiClient.post<ApiResponse<PaginatedResponse<LostItem>>>(
+      '/api/v1/lost-items/filter',
+      {
+        category: filters.category ?? null,
+        location: filters.location ?? null,
+        brand: filters.brand ?? null,
+        foundDateAfter: filters.foundDateAfter ?? null,
+        page: filters.page ?? 0,
+        size: filters.size ?? 20
+      }
     );
     return response.data.data;
   },
