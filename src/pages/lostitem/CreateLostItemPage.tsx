@@ -4,7 +4,6 @@ import {
   Upload, 
   Camera, 
   Image as ImageIcon, 
-  MapPin, 
   Calendar, 
   Package, 
   CheckCircle,

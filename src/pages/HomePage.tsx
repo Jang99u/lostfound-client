@@ -111,7 +111,7 @@ const HomePage = () => {
     navigate('/lost-items', { 
       state: { 
         searchQuery: searchQuery.trim() || undefined, 
-        category: selectedCategory && selectedCategory !== '' ? selectedCategory : undefined, 
+        category: selectedCategory || undefined, 
         location: selectedLocation.trim() || undefined,
         brand: selectedBrand.trim() || undefined,
         foundDate: selectedFoundDate || undefined

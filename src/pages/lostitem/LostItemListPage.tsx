@@ -230,21 +230,6 @@ const LostItemListPage = () => {
     // filterStateRef를 사용하므로 의존성 배열 비워도 됨
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // 필터 초기화
-  const clearFilters = () => {
-    setSearchQuery('');
-    setSelectedCategory('');
-    setSelectedLocation('');
-    setSelectedBrand('');
-    setFoundDateAfter('');
-    // 임시 상태도 초기화
-    setTempCategory('');
-    setTempLocation('');
-    setTempBrand('');
-    setTempFoundDateAfter('');
-    void fetchAllItems();
-  };
   
   // 필터 모달 열 때 현재 필터 상태를 임시 상태로 복사
   const handleOpenFilters = () => {
