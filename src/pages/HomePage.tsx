@@ -50,7 +50,7 @@ const HomePage = () => {
   const [currentLocation, setCurrentLocation] = useState<{ lat: number; lon: number } | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [searchPlaceName, setSearchPlaceName] = useState<string>(''); // 장소명 검색
-  const [topK, setTopK] = useState(5); // 기본값 5개
+  const topK = 5; // 기본값 5개
   const [nearbyLocations, setNearbyLocations] = useState<CustodyLocation[]>([]);
   const [loadingNearby, setLoadingNearby] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
