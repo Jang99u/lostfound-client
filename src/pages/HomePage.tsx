@@ -55,6 +55,7 @@ const HomePage = () => {
   const [loadingNearby, setLoadingNearby] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchTrigger, setSearchTrigger] = useState(0); // 검색 트리거 (버튼 클릭 시 증가)
+  const [userInitiatedSearch, setUserInitiatedSearch] = useState(false); // 사용자가 명시적으로 검색했는지 여부
   const lastSearchedPointRef = useRef<{ lat: number; lon: number } | null>(null); // 마지막 검색한 좌표 추적
 
   // 현재 위치 가져오기
@@ -181,10 +182,17 @@ const HomePage = () => {
       }
 
       // 장소명이 없으면 좌표 기반 검색
+      // 단, 사용자가 명시적으로 검색하기 전까지는 자동 검색하지 않음
       const searchPoint = selectedPoint || currentLocation;
       if (!searchPoint) {
         // 좌표가 없으면 로딩 상태를 false로 설정
         setLoadingNearby(false);
+        return;
+      }
+
+      // 사용자가 명시적으로 검색하지 않았으면 자동 검색하지 않음
+      // (지도 클릭이나 장소명 검색 버튼 클릭 시에만 검색)
+      if (!userInitiatedSearch && !searchPlaceName.trim()) {
         return;
       }
 
@@ -251,7 +259,7 @@ const HomePage = () => {
 
     fetchNearbyLocations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPoint, currentLocation, searchPlaceName, topK, searchTrigger]); // loadingNearby는 의존성에서 제외 (무한 루프 방지)
+  }, [selectedPoint, currentLocation, searchPlaceName, topK, searchTrigger, userInitiatedSearch]); // loadingNearby는 의존성에서 제외 (무한 루프 방지)
 
   // 최근 등록된 분실물 및 통계 가져오기
   useEffect(() => {
@@ -460,6 +468,7 @@ const HomePage = () => {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && searchPlaceName.trim()) {
                       e.preventDefault();
+                      setUserInitiatedSearch(true); // 사용자가 Enter를 눌렀으므로 검색 허용
                       setSearchTrigger(prev => prev + 1);
                     }
                   }}
@@ -470,6 +479,7 @@ const HomePage = () => {
                   type="button"
                   onClick={() => {
                     if (searchPlaceName.trim()) {
+                      setUserInitiatedSearch(true); // 사용자가 검색 버튼을 클릭했으므로 검색 허용
                       // 검색 트리거 증가하여 useEffect에서 검색 실행
                       setSearchTrigger(prev => prev + 1);
                     }
@@ -488,6 +498,7 @@ const HomePage = () => {
                       setSearchTrigger(0);
                       setNearbyLocations([]);
                       setSearchError(null);
+                      setUserInitiatedSearch(false); // 초기화 시 검색 플래그도 리셋
                     }}
                     disabled={loadingNearby}
                   >
@@ -508,6 +519,7 @@ const HomePage = () => {
               onLocationSelect={(lat, lon) => {
                 setSelectedPoint({ lat, lon });
                 setSearchPlaceName(''); // 지도 클릭 시 장소명 초기화
+                setUserInitiatedSearch(true); // 사용자가 지도를 클릭했으므로 검색 허용
               }}
               height="400px"
               nearbyLocations={nearbyLocations}
