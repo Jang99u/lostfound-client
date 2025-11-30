@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { MapPin } from 'lucide-react';
+import type { CustodyLocation } from '../../apis/custodyLocation';
 
 interface TmapSelectorProps {
   latitude?: number;
   longitude?: number;
   onLocationSelect: (lat: number, lon: number) => void;
   height?: string;
+  nearbyLocations?: CustodyLocation[];
 }
 
 declare global {
@@ -26,13 +28,18 @@ const TmapSelector: React.FC<TmapSelectorProps> = ({
   latitude,
   longitude,
   onLocationSelect,
-  height = '360px'
+  height = '360px',
+  nearbyLocations = []
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
+  const nearbyMarkersRef = useRef<any[]>([]);
+  const polylinesRef = useRef<any[]>([]); // 경로 폴리라인 저장
   const [mapReady, setMapReady] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [showRoutes, setShowRoutes] = useState<boolean>(false); // 경로 표시 여부
+  const [loadingRoutes, setLoadingRoutes] = useState<boolean>(false); // 경로 로딩 중
 
   // TMAP SDK가 로드될 때까지 대기 (main.tsx에서 스크립트가 로드됨)
   useEffect(() => {
@@ -127,12 +134,14 @@ const TmapSelector: React.FC<TmapSelectorProps> = ({
       mapRef.current.on('ConfigLoad', () => {
         console.log('[TMAP] 지도 설정 로드 완료');
 
-        // 초기 마커가 있으면 표시
+        // 초기 마커가 있으면 표시 (현재 위치/선택 위치)
         if (latitude && longitude && Tmap.Marker) {
           try {
+            // 기본 마커 사용 (icon 옵션 없이)
             markerRef.current = new Tmap.Marker({
               position: new Tmap.LatLng(latitude, longitude),
-              map: mapRef.current
+              map: mapRef.current,
+              title: '현재 위치'
             });
             console.log('[TMAP] 초기 마커 생성 완료');
           } catch (e) {
@@ -156,11 +165,12 @@ const TmapSelector: React.FC<TmapSelectorProps> = ({
               markerRef.current.setMap(null);
             }
 
-            // 새 마커 생성
+            // 새 마커 생성 (선택 위치)
             if (Tmap.Marker) {
               markerRef.current = new Tmap.Marker({
                 position: new Tmap.LatLng(lat, lon),
-                map: mapRef.current
+                map: mapRef.current,
+                title: '선택한 위치'
               });
             }
 
@@ -177,6 +187,26 @@ const TmapSelector: React.FC<TmapSelectorProps> = ({
         // cleanup: 지도 제거
         if (mapRef.current) {
           try {
+            // 주변 마커들 제거
+            nearbyMarkersRef.current.forEach(marker => {
+              try {
+                marker.setMap(null);
+              } catch (e) {
+                console.warn('[TMAP] 주변 마커 제거 실패:', e);
+              }
+            });
+            nearbyMarkersRef.current = [];
+            
+            // 폴리라인 제거
+            polylinesRef.current.forEach(polyline => {
+              try {
+                polyline.setMap(null);
+              } catch (e) {
+                console.warn('[TMAP] 폴리라인 제거 실패:', e);
+              }
+            });
+            polylinesRef.current = [];
+            
             mapRef.current.destroy?.();
           } catch (e) {
             console.warn('[TMAP] 지도 제거 실패:', e);
@@ -203,12 +233,260 @@ const TmapSelector: React.FC<TmapSelectorProps> = ({
     } else if (tmap.Marker) {
       markerRef.current = new tmap.Marker({
         position,
-        map: mapRef.current
+        map: mapRef.current,
+        title: '현재 위치'
       });
     }
 
     mapRef.current.setCenter(position);
   }, [latitude, longitude]);
+
+  // TMap API로 도보 경로 가져오기
+  const fetchWalkingRoute = async (startLat: number, startLon: number, endLat: number, endLon: number) => {
+    const TMAP_REST_API_KEY = import.meta.env.VITE_TMAP_REST_API_KEY || import.meta.env.VITE_TMAP_JS_API_KEY;
+    
+    if (!TMAP_REST_API_KEY) {
+      console.warn('[TMAP] TMap REST API 키가 설정되지 않았습니다.');
+      return null;
+    }
+
+    try {
+      const response = await fetch('https://apis.openapi.sk.com/tmap/routes/pedestrian?version=1', {
+        method: 'POST',
+        headers: {
+          'appKey': TMAP_REST_API_KEY,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          startX: String(startLon),
+          startY: String(startLat),
+          endX: String(endLon),
+          endY: String(endLat),
+          reqCoordType: 'WGS84GEO',
+          resCoordType: 'WGS84GEO',
+          startName: '출발지',
+          endName: '도착지',
+          searchOption: '0'
+        })
+      });
+
+      if (!response.ok) {
+        console.error('[TMAP] 경로 API 호출 실패:', response.status);
+        return null;
+      }
+
+      const data = await response.json();
+      
+      if (data.features && data.features.length > 0) {
+        // LineString 타입의 geometry에서 coordinates 추출
+        const feature = data.features.find((f: any) => f.geometry?.type === 'LineString');
+        if (feature && feature.geometry?.coordinates) {
+          return feature.geometry.coordinates; // [[lon, lat], [lon, lat], ...] 형식
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('[TMAP] 경로 가져오기 에러:', error);
+      return null;
+    }
+  };
+
+  // 도보 경로 시각화
+  const drawWalkingRoutes = async () => {
+    const tmap = window.Tmapv3 || window.Tmapvector;
+    if (!mapRef.current || !tmap || !nearbyLocations || nearbyLocations.length === 0) {
+      return;
+    }
+
+    if (!latitude || !longitude) {
+      console.warn('[TMAP] 출발지 좌표가 없습니다.');
+      return;
+    }
+
+    setLoadingRoutes(true);
+
+    // 기존 폴리라인 제거
+    polylinesRef.current.forEach(polyline => {
+      try {
+        polyline.setMap(null);
+      } catch (e) {
+        console.warn('[TMAP] 폴리라인 제거 실패:', e);
+      }
+    });
+    polylinesRef.current = [];
+
+    try {
+      // 각 보관소까지의 경로를 그리기
+      for (let i = 0; i < Math.min(nearbyLocations.length, 5); i++) { // 최대 5개까지만
+        const location = nearbyLocations[i];
+        if (!location.latitude || !location.longitude) continue;
+
+        const coordinates = await fetchWalkingRoute(
+          latitude,
+          longitude,
+          location.latitude,
+          location.longitude
+        );
+
+        if (coordinates && coordinates.length > 0) {
+          console.log(`[TMAP] 경로 ${i + 1} 좌표 개수:`, coordinates.length);
+          
+          // 좌표를 TMap LatLng 배열로 변환
+          const path = coordinates.map((coord: number[]) => 
+            new tmap.LatLng(coord[1], coord[0]) // [lon, lat] -> LatLng(lat, lon)
+          );
+
+          // 폴리라인 생성 (색상은 순위에 따라 다르게)
+          const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7'];
+          
+          // TMapv3와 Tmapvector 모두 지원
+          let polyline: any = null;
+          
+          // TMapv3 API 확인
+          console.log('[TMAP] 사용 가능한 API:', {
+            Polyline: !!tmap.Polyline,
+            MultiPolyline: !!tmap.MultiPolyline,
+            TMapv3: !!window.Tmapv3,
+            Tmapvector: !!window.Tmapvector
+          });
+          
+          // 방법 1: TMapv3.Polyline 시도
+          if (tmap.Polyline) {
+            try {
+              polyline = new tmap.Polyline({
+                path: path,
+                strokeColor: colors[i % colors.length],
+                strokeWeight: 4,
+                strokeOpacity: 0.7,
+                map: mapRef.current
+              });
+              console.log(`[TMAP] Polyline 생성 성공 (경로 ${i + 1})`);
+            } catch (e) {
+              console.warn(`[TMAP] Polyline 생성 실패 (경로 ${i + 1}):`, e);
+            }
+          }
+          
+          // 방법 2: TMapv3.MultiPolyline 시도
+          if (!polyline && tmap.MultiPolyline) {
+            try {
+              polyline = new tmap.MultiPolyline({
+                path: path,
+                strokeColor: colors[i % colors.length],
+                strokeWeight: 4,
+                strokeOpacity: 0.7,
+                map: mapRef.current
+              });
+              console.log(`[TMAP] MultiPolyline 생성 성공 (경로 ${i + 1})`);
+            } catch (e) {
+              console.warn(`[TMAP] MultiPolyline 생성 실패 (경로 ${i + 1}):`, e);
+            }
+          }
+
+          // 방법 3: 직접 좌표 배열 사용 시도
+          if (!polyline && tmap.Polyline) {
+            try {
+              // 좌표 배열을 직접 전달
+              const pathArray = coordinates.map((coord: number[]) => [coord[1], coord[0]]);
+              polyline = new tmap.Polyline({
+                path: pathArray,
+                strokeColor: colors[i % colors.length],
+                strokeWeight: 4,
+                strokeOpacity: 0.7,
+                map: mapRef.current
+              });
+              console.log(`[TMAP] Polyline 생성 성공 (방법3, 경로 ${i + 1})`);
+            } catch (e) {
+              console.warn(`[TMAP] Polyline 생성 실패 (방법3, 경로 ${i + 1}):`, e);
+            }
+          }
+
+          if (polyline) {
+            polylinesRef.current.push(polyline);
+            console.log(`[TMAP] 경로 ${i + 1} 추가 완료`);
+          } else {
+            console.warn(`[TMAP] 경로 ${i + 1}을 생성할 수 없습니다. TMap API 버전을 확인해주세요.`);
+            console.warn('[TMAP] 사용 가능한 객체:', Object.keys(tmap));
+          }
+        } else {
+          console.warn(`[TMAP] 경로 ${i + 1}의 좌표가 없습니다.`);
+        }
+
+        // API 호출 제한을 위한 딜레이
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+
+      console.log(`[TMAP] 경로 ${polylinesRef.current.length}개 그리기 완료`);
+    } catch (e) {
+      console.error('[TMAP] 경로 그리기 에러:', e);
+    } finally {
+      setLoadingRoutes(false);
+    }
+  };
+
+  // 경로 표시 토글
+  useEffect(() => {
+    if (showRoutes && nearbyLocations.length > 0 && latitude && longitude) {
+      drawWalkingRoutes();
+    } else {
+      // 경로 숨기기
+      polylinesRef.current.forEach(polyline => {
+        try {
+          polyline.setMap(null);
+        } catch (e) {
+          console.warn('[TMAP] 폴리라인 제거 실패:', e);
+        }
+      });
+      polylinesRef.current = [];
+    }
+  }, [showRoutes, nearbyLocations, latitude, longitude]);
+
+  // 주변 보관소 마커 표시
+  useEffect(() => {
+    const tmap = window.Tmapv3 || window.Tmapvector;
+    if (!mapRef.current || !tmap || !nearbyLocations || nearbyLocations.length === 0) {
+      return;
+    }
+
+    // 기존 주변 마커들 제거
+    nearbyMarkersRef.current.forEach(marker => {
+      try {
+        marker.setMap(null);
+      } catch (e) {
+        console.warn('[TMAP] 주변 마커 제거 실패:', e);
+      }
+    });
+    nearbyMarkersRef.current = [];
+
+    // 새로운 주변 보관소 마커들 생성
+    try {
+      nearbyLocations.forEach((location, index) => {
+        if (location.latitude && location.longitude && tmap.Marker) {
+          const marker = new tmap.Marker({
+            position: new tmap.LatLng(location.latitude, location.longitude),
+            map: mapRef.current,
+            title: `${index + 1}. ${location.name}${location.walkingTime ? ` (도보 ${Math.round(location.walkingTime)}분)` : ''}`
+          });
+          nearbyMarkersRef.current.push(marker);
+        }
+      });
+      console.log(`[TMAP] 주변 보관소 마커 ${nearbyMarkersRef.current.length}개 생성 완료`);
+    } catch (e) {
+      console.error('[TMAP] 주변 마커 생성 에러:', e);
+    }
+
+    return () => {
+      // cleanup: 주변 마커들 제거
+      nearbyMarkersRef.current.forEach(marker => {
+        try {
+          marker.setMap(null);
+        } catch (e) {
+          console.warn('[TMAP] 주변 마커 제거 실패:', e);
+        }
+      });
+      nearbyMarkersRef.current = [];
+    };
+  }, [nearbyLocations]);
 
   return (
     <div className="w-full">
@@ -237,9 +515,32 @@ const TmapSelector: React.FC<TmapSelectorProps> = ({
         ) : null}
       </div>
       {mapReady && (
-        <p className="mt-2 text-xs text-gray-500">
-          지도를 클릭하여 위치를 선택하세요.
-        </p>
+        <div className="mt-2 space-y-2">
+          <p className="text-xs text-gray-500">
+            지도를 클릭하여 위치를 선택하세요.
+          </p>
+          {nearbyLocations && nearbyLocations.length > 0 && latitude && longitude && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowRoutes(!showRoutes)}
+                disabled={loadingRoutes}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                  showRoutes
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                } ${loadingRoutes ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {loadingRoutes ? '경로 로딩 중...' : showRoutes ? '경로 숨기기' : '도보 경로 표시'}
+              </button>
+              {showRoutes && (
+                <span className="text-xs text-gray-500">
+                  최대 5개 보관소까지 경로를 표시합니다.
+                </span>
+              )}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

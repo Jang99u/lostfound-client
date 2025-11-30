@@ -13,6 +13,7 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 120000, // 120초 (2분) - TMap API 호출이 오래 걸릴 수 있음
 });
 
 // 요청 인터셉터 - 토큰 자동 추가

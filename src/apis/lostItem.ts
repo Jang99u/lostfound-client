@@ -108,6 +108,9 @@ export const lostItemApi = {
       location?: string;
       brand?: string;
       foundDateAfter?: string;  // 해당 날짜 이후
+      locationLatitude?: number;  // 장소 필터링용 좌표 (위도)
+      locationLongitude?: number; // 장소 필터링용 좌표 (경도)
+      locationRadius?: number;    // 반경 (미터, 기본값 10000m = 10km)
       page?: number;
       size?: number;
     }
@@ -119,6 +122,9 @@ export const lostItemApi = {
         location: filters.location ?? null,
         brand: filters.brand ?? null,
         foundDateAfter: filters.foundDateAfter ?? null,
+        locationLatitude: filters.locationLatitude ?? null,
+        locationLongitude: filters.locationLongitude ?? null,
+        locationRadius: filters.locationRadius ?? null,
         page: filters.page ?? 0,
         size: filters.size ?? 20
       }

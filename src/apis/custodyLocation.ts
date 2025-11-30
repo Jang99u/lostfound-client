@@ -30,7 +30,7 @@ export const custodyLocationApi = {
   // 사용자 위치 기준 가까운 보관소 검색
   findNearbyCustodyLocations: async (
     request: NearbyCustodyLocationRequest
-  ): Promise<CustodyLocation[]> => {
+  ): Promise<{ locations: CustodyLocation[]; quotaExceeded: boolean }> => {
     const response = await apiClient.post<ApiResponse<CustodyLocation[]>>(
       '/api/v1/custody-locations/nearby',
       {
@@ -39,7 +39,38 @@ export const custodyLocationApi = {
         topK: request.topK || 10
       }
     );
-    return response.data.data;
+    // 헤더에서 쿼터 초과 상태 확인 (axios는 헤더 이름을 그대로 유지)
+    const quotaExceeded = response.headers['x-tmap-quota-exceeded'] === 'true' || 
+                          response.headers['X-TMap-Quota-Exceeded'] === 'true' ||
+                          response.headers['X-TMAP-QUOTA-EXCEEDED'] === 'true';
+    return {
+      locations: response.data.data,
+      quotaExceeded
+    };
+  },
+
+  // 장소명 기반 가까운 보관소 검색
+  findNearbyCustodyLocationsByPlaceName: async (
+    placeName: string,
+    topK?: number
+  ): Promise<{ locations: CustodyLocation[]; quotaExceeded: boolean }> => {
+    const response = await apiClient.get<ApiResponse<CustodyLocation[]>>(
+      '/api/v1/custody-locations/nearby-by-place',
+      {
+        params: {
+          placeName,
+          topK: topK || 5
+        }
+      }
+    );
+    // 헤더에서 쿼터 초과 상태 확인 (axios는 헤더 이름을 그대로 유지)
+    const quotaExceeded = response.headers['x-tmap-quota-exceeded'] === 'true' || 
+                          response.headers['X-TMap-Quota-Exceeded'] === 'true' ||
+                          response.headers['X-TMAP-QUOTA-EXCEEDED'] === 'true';
+    return {
+      locations: response.data.data,
+      quotaExceeded
+    };
   }
 };
 

@@ -210,6 +210,7 @@ const LostItemListPage = () => {
           location: locationValue,
           brand: brandValue,
           foundDateAfter: foundDateValue,
+          locationRadius: 10000, // 기본값 10km (미터 단위)
           page,
           size: 20
         });
@@ -324,7 +325,11 @@ const LostItemListPage = () => {
         
         lostItemApi.searchLostItems(searchRequest)
           .then(result => {
-            setItems(result.items || []);
+            const items = result.items || [];
+            // 디버깅: 서버에서 받은 순서 확인
+            console.log('서버에서 받은 검색 결과 순서 (첫 5개):', 
+              items.slice(0, 5).map(item => `${item.id}:${item.itemName}`).join(', '));
+            setItems(items);
             setTotalCount(result.totalCount || 0);
             setTotalPages(0);
             setCurrentPage(0);
@@ -366,6 +371,7 @@ const LostItemListPage = () => {
             location: locationValue,
             brand: brandValue,
             foundDateAfter: foundDateValue,
+            locationRadius: 10000, // 기본값 10km (미터 단위)
             page: 0,
             size: 20
           })
@@ -394,6 +400,14 @@ const LostItemListPage = () => {
 
   // 정렬된 아이템
   const sortedItems = isSearchMode ? items : applySorting(items);
+  
+  // 디버깅: 검색 모드일 때 표시되는 순서 확인
+  useEffect(() => {
+    if (isSearchMode && sortedItems.length > 0) {
+      console.log('화면에 표시되는 순서 (첫 5개):', 
+        sortedItems.slice(0, 5).map(item => `${item.id}:${item.itemName}`).join(', '));
+    }
+  }, [isSearchMode, sortedItems]);
 
   // 카테고리 옵션
   const categoryOptions = Object.entries(ItemCategoryLabels).map(([key, label]) => ({
