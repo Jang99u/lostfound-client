@@ -57,9 +57,14 @@ const HomePage = () => {
   const [searchTrigger, setSearchTrigger] = useState(0); // 검색 트리거 (버튼 클릭 시 증가)
   const [userInitiatedSearch, setUserInitiatedSearch] = useState(false); // 사용자가 명시적으로 검색했는지 여부
   const lastSearchedPointRef = useRef<{ lat: number; lon: number } | null>(null); // 마지막 검색한 좌표 추적
+  const initialLocationSetRef = useRef<boolean>(false); // 현재 위치가 처음 설정되었는지 추적
+  const lastSearchTriggerRef = useRef<number>(0); // 마지막 검색 트리거 값 추적 (중복 요청 방지)
 
   // 현재 위치 가져오기
   useEffect(() => {
+    // 기본 위치 (서울시청)
+    const defaultLocation = { lat: 37.5665, lon: 126.9780 };
+    
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -70,14 +75,66 @@ const HomePage = () => {
           // selectedPoint가 없을 때만 설정 (이미 사용자가 선택한 위치가 있으면 유지)
           setSelectedPoint(prev => prev || newLocation);
           setLocationError(null);
+          // 현재 위치가 처음 설정될 때만 자동 검색 허용
+          if (!initialLocationSetRef.current) {
+            initialLocationSetRef.current = true;
+            setUserInitiatedSearch(true); // 현재 위치 기준 자동 검색 허용
+          }
         },
         (error) => {
-          console.error('위치 정보 가져오기 실패:', error);
-          setLocationError('현재 위치를 가져올 수 없습니다. 지도를 클릭하여 위치를 선택해주세요.');
+          // 에러 코드별 상세 정보
+          let errorMessage = '';
+          switch (error.code) {
+            case error.PERMISSION_DENIED:
+              errorMessage = '위치 권한이 거부되었습니다. 브라우저 설정에서 위치 권한을 허용해주세요.';
+              console.error('❌ 위치 권한 거부:', error);
+              break;
+            case error.POSITION_UNAVAILABLE:
+              errorMessage = '위치 정보를 사용할 수 없습니다. (POSITION_UNAVAILABLE)';
+              console.error('❌ 위치 정보 사용 불가:', {
+                code: error.code,
+                message: error.message,
+                userAgent: navigator.userAgent,
+                isSecureContext: window.isSecureContext,
+                protocol: window.location.protocol,
+                hostname: window.location.hostname
+              });
+              break;
+            case error.TIMEOUT:
+              errorMessage = '위치 정보 요청 시간이 초과되었습니다.';
+              console.error('❌ 위치 정보 요청 타임아웃:', error);
+              break;
+            default:
+              errorMessage = `위치 정보를 가져올 수 없습니다. (에러 코드: ${error.code})`;
+              console.error('❌ 위치 정보 가져오기 실패:', error);
+          }
+          
+          // 위치 정보를 가져올 수 없으면 기본 위치(서울시청) 사용
+          setCurrentLocation(defaultLocation);
+          setSelectedPoint(prev => prev || defaultLocation);
+          setLocationError(errorMessage + ' 기본 위치(서울시청)를 사용합니다. 지도를 클릭하여 원하는 위치를 선택할 수 있습니다.');
+          // 기본 위치로도 자동 검색 허용
+          if (!initialLocationSetRef.current) {
+            initialLocationSetRef.current = true;
+            setUserInitiatedSearch(true);
+          }
+        },
+        {
+          timeout: 10000, // 10초 타임아웃
+          enableHighAccuracy: false, // 정확도 낮춰서 빠르게 응답
+          maximumAge: 300000 // 5분간 캐시된 위치 사용
         }
       );
     } else {
-      setLocationError('브라우저가 위치 정보를 지원하지 않습니다.');
+      // 브라우저가 위치 정보를 지원하지 않으면 기본 위치 사용
+      console.warn('브라우저가 위치 정보를 지원하지 않습니다. 기본 위치를 사용합니다.');
+      setCurrentLocation(defaultLocation);
+      setSelectedPoint(prev => prev || defaultLocation);
+      setLocationError('브라우저가 위치 정보를 지원하지 않아 기본 위치(서울시청)를 사용합니다. 지도를 클릭하여 원하는 위치를 선택할 수 있습니다.');
+      if (!initialLocationSetRef.current) {
+        initialLocationSetRef.current = true;
+        setUserInitiatedSearch(true);
+      }
     }
   }, []);
 
@@ -101,10 +158,17 @@ const HomePage = () => {
 
       // 장소명 검색이 있고 검색 트리거가 발생했으면 장소명 기반 검색
       if (searchPlaceName.trim() && searchTrigger > 0) {
+        // 중복 요청 방지: 같은 트리거 값이면 스킵
+        if (lastSearchTriggerRef.current === searchTrigger) {
+          console.log('[DEBUG] 동일한 검색 트리거로 인한 중복 요청을 방지합니다:', searchTrigger);
+          return;
+        }
+        
+        lastSearchTriggerRef.current = searchTrigger;
         setLoadingNearby(true);
         setSearchError(null);
         try {
-          console.log('장소명 검색 시작:', searchPlaceName.trim());
+          console.log('장소명 검색 시작:', searchPlaceName.trim(), 'trigger:', searchTrigger);
           const result = await custodyLocationApi.findNearbyCustodyLocationsByPlaceName(
             searchPlaceName.trim(),
             topK

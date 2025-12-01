@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { MapPin } from 'lucide-react';
 import type { CustodyLocation } from '../../apis/custodyLocation';
 
@@ -38,7 +38,7 @@ const TmapSelector: React.FC<TmapSelectorProps> = ({
   const polylinesRef = useRef<any[]>([]); // 경로 폴리라인 저장
   const [mapReady, setMapReady] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [showRoutes, setShowRoutes] = useState<boolean>(false); // 경로 표시 여부
+  const [showRoutes, setShowRoutes] = useState<boolean>(true); // 경로 표시 여부 (기본값 true로 변경)
   const [loadingRoutes, setLoadingRoutes] = useState<boolean>(false); // 경로 로딩 중
 
   // TMAP SDK가 로드될 때까지 대기 (main.tsx에서 스크립트가 로드됨)
@@ -276,15 +276,31 @@ const TmapSelector: React.FC<TmapSelectorProps> = ({
       }
 
       const data = await response.json();
+      console.log('[TMAP] 경로 API 응답:', data);
       
       if (data.features && data.features.length > 0) {
-        // LineString 타입의 geometry에서 coordinates 추출
-        const feature = data.features.find((f: any) => f.geometry?.type === 'LineString');
-        if (feature && feature.geometry?.coordinates) {
-          return feature.geometry.coordinates; // [[lon, lat], [lon, lat], ...] 형식
+        // 모든 LineString 타입의 geometry에서 coordinates 수집
+        const allCoordinates: number[][] = [];
+        
+        data.features.forEach((feature: any) => {
+          if (feature.geometry?.type === 'LineString' && feature.geometry?.coordinates) {
+            // LineString의 coordinates는 이미 배열의 배열 형태
+            allCoordinates.push(...feature.geometry.coordinates);
+          } else if (feature.geometry?.type === 'MultiLineString' && feature.geometry?.coordinates) {
+            // MultiLineString의 경우 각 LineString의 coordinates를 합침
+            feature.geometry.coordinates.forEach((lineString: number[][]) => {
+              allCoordinates.push(...lineString);
+            });
+          }
+        });
+        
+        if (allCoordinates.length > 0) {
+          console.log('[TMAP] 수집된 좌표 개수:', allCoordinates.length);
+          return allCoordinates; // [[lon, lat], [lon, lat], ...] 형식
         }
       }
       
+      console.warn('[TMAP] 경로 좌표를 찾을 수 없습니다. 응답:', data);
       return null;
     } catch (error) {
       console.error('[TMAP] 경로 가져오기 에러:', error);
@@ -293,7 +309,7 @@ const TmapSelector: React.FC<TmapSelectorProps> = ({
   };
 
   // 도보 경로 시각화
-  const drawWalkingRoutes = async () => {
+  const drawWalkingRoutes = useCallback(async () => {
     const tmap = window.Tmapv3 || window.Tmapvector;
     if (!mapRef.current || !tmap || !nearbyLocations || nearbyLocations.length === 0) {
       return;
@@ -332,13 +348,10 @@ const TmapSelector: React.FC<TmapSelectorProps> = ({
         if (coordinates && coordinates.length > 0) {
           console.log(`[TMAP] 경로 ${i + 1} 좌표 개수:`, coordinates.length);
           
-          // 좌표를 TMap LatLng 배열로 변환
-          const path = coordinates.map((coord: number[]) => 
-            new tmap.LatLng(coord[1], coord[0]) // [lon, lat] -> LatLng(lat, lon)
-          );
-
-          // 폴리라인 생성 (색상은 순위에 따라 다르게)
-          const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7'];
+          // 폴리라인 생성 (진한 빨간색으로 통일, 더 잘 보이게 설정)
+          const routeColor = '#DC2626'; // 진한 빨간색 (red-600)
+          const routeWeight = 6; // 두께 증가
+          const routeOpacity = 0.95; // 불투명도 증가
           
           // TMapv3와 Tmapvector 모두 지원
           let polyline: any = null;
@@ -348,65 +361,126 @@ const TmapSelector: React.FC<TmapSelectorProps> = ({
             Polyline: !!tmap.Polyline,
             MultiPolyline: !!tmap.MultiPolyline,
             TMapv3: !!window.Tmapv3,
-            Tmapvector: !!window.Tmapvector
+            Tmapvector: !!window.Tmapvector,
+            Map: !!tmap.Map
           });
           
-          // 방법 1: TMapv3.Polyline 시도
-          if (tmap.Polyline) {
+          // TMap Vector API의 경우 다른 방식 사용
+          if (window.Tmapvector && !window.Tmapv3) {
+            // TMap Vector API 사용
             try {
-              polyline = new tmap.Polyline({
-                path: path,
-                strokeColor: colors[i % colors.length],
-                strokeWeight: 4,
-                strokeOpacity: 0.7,
-                map: mapRef.current
-              });
-              console.log(`[TMAP] Polyline 생성 성공 (경로 ${i + 1})`);
+              // 좌표를 LatLng 배열로 변환
+              const path = coordinates.map((coord: number[]) => 
+                new tmap.LatLng(coord[1], coord[0]) // [lon, lat] -> LatLng(lat, lon)
+              );
+              
+              if (tmap.Polyline) {
+                polyline = new tmap.Polyline({
+                  path: path,
+                  strokeColor: routeColor,
+                  strokeWeight: routeWeight,
+                  strokeOpacity: routeOpacity,
+                  map: mapRef.current
+                });
+                console.log(`[TMAP] Vector Polyline 생성 성공 (경로 ${i + 1})`);
+              }
             } catch (e) {
-              console.warn(`[TMAP] Polyline 생성 실패 (경로 ${i + 1}):`, e);
+              console.warn(`[TMAP] Vector Polyline 생성 실패 (경로 ${i + 1}):`, e);
             }
-          }
-          
-          // 방법 2: TMapv3.MultiPolyline 시도
-          if (!polyline && tmap.MultiPolyline) {
-            try {
-              polyline = new tmap.MultiPolyline({
-                path: path,
-                strokeColor: colors[i % colors.length],
-                strokeWeight: 4,
-                strokeOpacity: 0.7,
-                map: mapRef.current
-              });
-              console.log(`[TMAP] MultiPolyline 생성 성공 (경로 ${i + 1})`);
-            } catch (e) {
-              console.warn(`[TMAP] MultiPolyline 생성 실패 (경로 ${i + 1}):`, e);
+          } else {
+            // TMapv3 API 사용
+            // 좌표를 TMap LatLng 배열로 변환
+            const path = coordinates.map((coord: number[]) => 
+              new tmap.LatLng(coord[1], coord[0]) // [lon, lat] -> LatLng(lat, lon)
+            );
+            
+            // 방법 1: TMapv3.Polyline 시도
+            if (tmap.Polyline) {
+              try {
+                polyline = new tmap.Polyline({
+                  path: path,
+                  strokeColor: routeColor,
+                  strokeWeight: routeWeight,
+                  strokeOpacity: routeOpacity,
+                  map: mapRef.current
+                });
+                console.log(`[TMAP] Polyline 생성 성공 (경로 ${i + 1})`);
+              } catch (e) {
+                console.warn(`[TMAP] Polyline 생성 실패 (경로 ${i + 1}):`, e);
+                console.warn('[TMAP] 에러 상세:', e);
+              }
             }
-          }
+            
+            // 방법 2: TMapv3.MultiPolyline 시도
+            if (!polyline && tmap.MultiPolyline) {
+              try {
+                polyline = new tmap.MultiPolyline({
+                  path: path,
+                  strokeColor: routeColor,
+                  strokeWeight: routeWeight,
+                  strokeOpacity: routeOpacity,
+                  map: mapRef.current
+                });
+                console.log(`[TMAP] MultiPolyline 생성 성공 (경로 ${i + 1})`);
+              } catch (e) {
+                console.warn(`[TMAP] MultiPolyline 생성 실패 (경로 ${i + 1}):`, e);
+              }
+            }
 
-          // 방법 3: 직접 좌표 배열 사용 시도
-          if (!polyline && tmap.Polyline) {
-            try {
-              // 좌표 배열을 직접 전달
-              const pathArray = coordinates.map((coord: number[]) => [coord[1], coord[0]]);
-              polyline = new tmap.Polyline({
-                path: pathArray,
-                strokeColor: colors[i % colors.length],
-                strokeWeight: 4,
-                strokeOpacity: 0.7,
-                map: mapRef.current
-              });
-              console.log(`[TMAP] Polyline 생성 성공 (방법3, 경로 ${i + 1})`);
-            } catch (e) {
-              console.warn(`[TMAP] Polyline 생성 실패 (방법3, 경로 ${i + 1}):`, e);
+            // 방법 3: 직접 좌표 배열 사용 시도
+            if (!polyline && tmap.Polyline) {
+              try {
+                // 좌표 배열을 직접 전달
+                const pathArray = coordinates.map((coord: number[]) => [coord[1], coord[0]]);
+                polyline = new tmap.Polyline({
+                  path: pathArray,
+                  strokeColor: routeColor,
+                  strokeWeight: routeWeight,
+                  strokeOpacity: routeOpacity,
+                  map: mapRef.current
+                });
+                console.log(`[TMAP] Polyline 생성 성공 (방법3, 경로 ${i + 1})`);
+              } catch (e) {
+                console.warn(`[TMAP] Polyline 생성 실패 (방법3, 경로 ${i + 1}):`, e);
+              }
             }
           }
 
           if (polyline) {
             polylinesRef.current.push(polyline);
-            console.log(`[TMAP] 경로 ${i + 1} 추가 완료`);
+            console.log(`[TMAP] 경로 ${i + 1} 추가 완료, polyline 객체:`, polyline);
+            
+            // 지도에 표시되는지 확인하기 위해 지도 범위 조정 (LatLngBounds가 있는 경우만)
+            if (coordinates.length > 0 && tmap.LatLngBounds) {
+              try {
+                const bounds = new tmap.LatLngBounds();
+                coordinates.forEach((coord: number[]) => {
+                  bounds.extend(new tmap.LatLng(coord[1], coord[0]));
+                });
+                // 출발지와 도착지도 포함
+                bounds.extend(new tmap.LatLng(latitude, longitude));
+                bounds.extend(new tmap.LatLng(location.latitude, location.longitude));
+                
+                if (mapRef.current.fitBounds) {
+                  mapRef.current.fitBounds(bounds);
+                }
+              } catch (e) {
+                console.warn('[TMAP] fitBounds 실패:', e);
+              }
+            }
+            
+            // polyline이 실제로 지도에 추가되었는지 확인
+            if (polyline.getMap && polyline.getMap() !== mapRef.current) {
+              console.warn(`[TMAP] 경로 ${i + 1}이 지도에 제대로 추가되지 않았습니다.`);
+              polyline.setMap(mapRef.current);
+            }
           } else {
             console.warn(`[TMAP] 경로 ${i + 1}을 생성할 수 없습니다. TMap API 버전을 확인해주세요.`);
             console.warn('[TMAP] 사용 가능한 객체:', Object.keys(tmap));
+            console.warn('[TMAP] tmap.Polyline 타입:', typeof tmap.Polyline);
+            if (tmap.Polyline) {
+              console.warn('[TMAP] Polyline 생성자:', tmap.Polyline.toString().substring(0, 200));
+            }
           }
         } else {
           console.warn(`[TMAP] 경로 ${i + 1}의 좌표가 없습니다.`);
@@ -422,11 +496,12 @@ const TmapSelector: React.FC<TmapSelectorProps> = ({
     } finally {
       setLoadingRoutes(false);
     }
-  };
+  }, [nearbyLocations, latitude, longitude]);
 
-  // 경로 표시 토글
+  // 경로 표시 토글 및 자동 그리기
   useEffect(() => {
     if (showRoutes && nearbyLocations.length > 0 && latitude && longitude) {
+      // nearbyLocations가 변경되면 자동으로 경로 그리기
       drawWalkingRoutes();
     } else {
       // 경로 숨기기
@@ -439,7 +514,7 @@ const TmapSelector: React.FC<TmapSelectorProps> = ({
       });
       polylinesRef.current = [];
     }
-  }, [showRoutes, nearbyLocations, latitude, longitude]);
+  }, [showRoutes, drawWalkingRoutes, nearbyLocations, latitude, longitude]);
 
   // 주변 보관소 마커 표시
   useEffect(() => {
