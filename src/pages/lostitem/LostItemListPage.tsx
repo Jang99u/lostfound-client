@@ -371,6 +371,26 @@ const LostItemListPage = () => {
     
       if (state?.searchQuery) {
       setSearchQuery(state.searchQuery);
+      
+      // 필터 상태 업데이트 (홈화면에서 넘어온 필터 상태 반영)
+      if (state?.category) setSelectedCategory(state.category);
+      if (state?.locations && state.locations.length > 0) {
+        setSelectedLocations(state.locations);
+      } else if (state?.location) {
+        setSelectedLocations([state.location]);
+      }
+      if (state?.distance) {
+        // km를 도보 시간으로 변환
+        const km = state.distance;
+        if (km === 10000) setSelectedDistance(10);
+        else if (km === 15000) setSelectedDistance(20);
+        else if (km === 20000) setSelectedDistance(30);
+      }
+      if (state?.brand) setSelectedBrand(state.brand);
+      if (state?.foundDate) {
+        setFoundDateAfter(state.foundDate);
+      }
+      
       // 검색어와 필터를 함께 전달
       const searchFilters = {
         category: state?.category,
