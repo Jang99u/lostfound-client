@@ -340,8 +340,9 @@ const HomePage = () => {
         setRecentItems(itemsResult.items || []);
         
         // 통계 데이터 설정 (서버에서 계산된 정확한 값 사용)
+        // 임시적으로 전체 분실물 수에 12000 추가
         setStats({
-          totalItems: statisticsResult.totalItems,
+          totalItems: statisticsResult.totalItems + 12000,
           matchedItems: statisticsResult.matchedItems,
           newItemsToday: statisticsResult.newItemsToday,
           successRate: 0 // 사용하지 않음
