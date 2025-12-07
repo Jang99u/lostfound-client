@@ -12,7 +12,8 @@ import {
   Clock,
   ArrowRight,
   Sparkles,
-  CheckCircle
+  CheckCircle,
+  X
 } from 'lucide-react';
 
 import Header from '../components/common/Header';
@@ -35,7 +36,8 @@ const HomePage = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | ''>('');
-  const [selectedLocation, setSelectedLocation] = useState('');
+  const [selectedLocations, setSelectedLocations] = useState<string[]>(['']); // 최대 3개 장소
+  const [selectedDistance, setSelectedDistance] = useState<number | ''>(''); // 도보 시간 (10분=10km, 20분=15km, 30분=20km)
   const [selectedBrand, setSelectedBrand] = useState('');
   const [selectedFoundDate, setSelectedFoundDate] = useState('');
   const [recentItems, setRecentItems] = useState<any[]>([]);
@@ -354,20 +356,58 @@ const HomePage = () => {
     fetchData();
   }, []);
 
+  // 도보 시간을 km로 변환 (10분=10km, 20분=15km, 30분=20km)
+  const convertWalkingTimeToKm = (walkingTime: number): number => {
+    switch (walkingTime) {
+      case 10: return 10000; // 10km
+      case 20: return 15000; // 15km
+      case 30: return 20000; // 20km
+      default: return 10000;
+    }
+  };
+
   // 검색 실행
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // 빈 장소 제거하고 유효한 장소만 추출
+    const validLocations = selectedLocations
+      .map(loc => loc.trim())
+      .filter(loc => loc.length > 0);
     
     // 검색어가 있으면 AI 검색, 없으면 필터만 적용
     navigate('/lost-items', { 
       state: { 
         searchQuery: searchQuery.trim() || undefined, 
         category: selectedCategory || undefined, 
-        location: selectedLocation.trim() || undefined,
+        location: validLocations.length === 1 ? validLocations[0] : undefined,
+        locations: validLocations.length > 1 ? validLocations : undefined,
+        distance: selectedDistance ? convertWalkingTimeToKm(selectedDistance as number) : undefined,
         brand: selectedBrand.trim() || undefined,
         foundDate: selectedFoundDate || undefined
       } 
     });
+  };
+
+  // 장소 입력 추가
+  const handleAddLocation = () => {
+    if (selectedLocations.length < 3) {
+      setSelectedLocations([...selectedLocations, '']);
+    }
+  };
+
+  // 장소 입력 제거
+  const handleRemoveLocation = (index: number) => {
+    if (selectedLocations.length > 1) {
+      setSelectedLocations(selectedLocations.filter((_, i) => i !== index));
+    }
+  };
+
+  // 장소 입력 변경
+  const handleLocationChange = (index: number, value: string) => {
+    const newLocations = [...selectedLocations];
+    newLocations[index] = value;
+    setSelectedLocations(newLocations);
   };
 
   // 카테고리 옵션
@@ -419,61 +459,110 @@ const HomePage = () => {
                 </div>
 
                 {/* 필터 옵션 */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        카테고리
+                      </label>
+                      <select
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value as ItemCategory)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">전체 카테고리</option>
+                        {categoryOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        브랜드
+                      </label>
+                      <Input
+                        type="text"
+                        placeholder="예: 나이키, 구찌"
+                        value={selectedBrand}
+                        onChange={(e) => setSelectedBrand(e.target.value)}
+                        leftIcon={<Package className="w-4 h-4" />}
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        습득일 이후
+                      </label>
+                      <Input
+                        type="date"
+                        value={selectedFoundDate}
+                        onChange={(e) => setSelectedFoundDate(e.target.value)}
+                        leftIcon={<Calendar className="w-4 h-4" />}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        도보 거리
+                      </label>
+                      <select
+                        value={selectedDistance}
+                        onChange={(e) => setSelectedDistance(e.target.value ? Number(e.target.value) : '')}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">전체 거리</option>
+                        <option value="10">도보 10분</option>
+                        <option value="20">도보 20분</option>
+                        <option value="30">도보 30분</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* 장소 입력 (최대 3개) */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      카테고리
+                      장소 (최대 3개)
                     </label>
-                    <select
-                      value={selectedCategory}
-                      onChange={(e) => setSelectedCategory(e.target.value as ItemCategory)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">전체 카테고리</option>
-                      {categoryOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
+                    <div className="space-y-2">
+                      {selectedLocations.map((location, index) => (
+                        <div key={index} className="flex gap-2">
+                          <Input
+                            type="text"
+                            placeholder={`장소 ${index + 1} (예: 강남역, 홍대입구역)`}
+                            value={location}
+                            onChange={(e) => handleLocationChange(index, e.target.value)}
+                            leftIcon={<MapPin className="w-4 h-4" />}
+                            className="flex-1"
+                          />
+                          {selectedLocations.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRemoveLocation(index)}
+                              className="px-3"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
                       ))}
-                    </select>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      장소
-                    </label>
-                    <Input
-                      type="text"
-                      placeholder="예: 강남역, 홍대입구역"
-                      value={selectedLocation}
-                      onChange={(e) => setSelectedLocation(e.target.value)}
-                      leftIcon={<MapPin className="w-4 h-4" />}
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      브랜드
-                    </label>
-                    <Input
-                      type="text"
-                      placeholder="예: 나이키, 구찌"
-                      value={selectedBrand}
-                      onChange={(e) => setSelectedBrand(e.target.value)}
-                      leftIcon={<Package className="w-4 h-4" />}
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      습득일 이후
-                    </label>
-                    <Input
-                      type="date"
-                      value={selectedFoundDate}
-                      onChange={(e) => setSelectedFoundDate(e.target.value)}
-                      leftIcon={<Calendar className="w-4 h-4" />}
-                    />
+                      {selectedLocations.length < 3 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleAddLocation}
+                          className="w-full"
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          장소 추가
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
 

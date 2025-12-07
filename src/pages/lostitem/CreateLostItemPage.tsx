@@ -340,7 +340,7 @@ const CreateLostItemPage = () => {
                     <option value="">보관 장소를 선택하세요</option>
                     {custodyLocations.map((loc) => (
                       <option key={loc.id} value={loc.id}>
-                        {loc.name} ({loc.itemCount}개 보관 중)
+                        {loc.name}
                       </option>
                     ))}
                   </select>

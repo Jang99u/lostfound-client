@@ -11,8 +11,6 @@ export interface User {
 // 분실물 카테고리 (LostItem보다 먼저 정의)
 export const ITEM_CATEGORIES = {
   WALLET: 'WALLET',
-  PHONE: 'PHONE',
-  CARD: 'CARD',
   BAG: 'BAG',
   CLOTHING: 'CLOTHING',
   ETC: 'ETC'
@@ -22,8 +20,6 @@ export type ItemCategory = typeof ITEM_CATEGORIES[keyof typeof ITEM_CATEGORIES];
 
 export const ItemCategoryLabels: Record<ItemCategory, string> = {
   [ITEM_CATEGORIES.WALLET]: '지갑',
-  [ITEM_CATEGORIES.PHONE]: '휴대폰',
-  [ITEM_CATEGORIES.CARD]: '카드',
   [ITEM_CATEGORIES.BAG]: '가방',
   [ITEM_CATEGORIES.CLOTHING]: '의류',
   [ITEM_CATEGORIES.ETC]: '기타'
@@ -117,8 +113,10 @@ export interface PaginatedResponse<T> {
 export interface LostItemFilters {
   category?: ItemCategory;
   location?: string;
+  locations?: string[];  // 여러 장소 (최대 3개)
   brand?: string;
   foundDateAfter?: string;  // 해당 날짜 이후
+  distance?: number;  // 거리 (미터 단위, 10000=10km, 15000=15km, 20000=20km)
 }
 
 // 분실물 등록 요청 타입
@@ -140,8 +138,12 @@ export interface SearchLostItemRequest {
   topK?: number;
   category?: ItemCategory;
   location?: string;
+  locations?: string[];  // 여러 장소 (최대 3개)
   brand?: string;
   foundDateAfter?: string;
+  locationRadius?: number;  // 거리 (미터 단위, 10000=10km, 15000=15km, 20000=20km)
+  page?: number;
+  size?: number;
 }
 
 // 마이페이지 타입
