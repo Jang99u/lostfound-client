@@ -14,10 +14,7 @@ import {
   Grid3X3,
   List,
   Users,
-  Search,
-  X,
-  Eye,
-  EyeOff
+  Search
 } from 'lucide-react';
 
 import Card from '../components/common/Card';
