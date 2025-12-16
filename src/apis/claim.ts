@@ -5,9 +5,21 @@ import type { ClaimRequest, CreateClaimRequest, ApiResponse } from '../types';
 export const claimApi = {
   // 회수 요청 생성
   createClaimRequest: async (lostItemId: number, data: CreateClaimRequest): Promise<ClaimRequest> => {
+    const formData = new FormData();
+    formData.append('message', data.message);
+    
+    if (data.image) {
+      formData.append('image', data.image);
+    }
+
     const response = await apiClient.post<ApiResponse<ClaimRequest>>(
       `/api/v1/claims/lost-items/${lostItemId}`,
-      data
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
     );
     return response.data.data;
   },

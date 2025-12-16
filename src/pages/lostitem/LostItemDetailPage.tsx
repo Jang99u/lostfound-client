@@ -7,7 +7,9 @@ import {
   Tag, 
   MoreVertical,
   Trash2,
-  Send
+  Send,
+  Image as ImageIcon,
+  X
 } from 'lucide-react';
 import { ItemCategoryLabels, type LostItem } from '../../types';
 import { lostItemApi } from '../../apis/lostItem';
@@ -31,6 +33,8 @@ const LostItemDetailPage = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showClaimModal, setShowClaimModal] = useState(false);
   const [claimMessage, setClaimMessage] = useState('');
+  const [claimImage, setClaimImage] = useState<File | null>(null);
+  const [claimImagePreview, setClaimImagePreview] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // 현재 사용자 정보 가져오기
@@ -93,6 +97,39 @@ const LostItemDetailPage = () => {
     }
   };
 
+  // 이미지 선택 핸들러
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // 이미지 파일만 허용
+      if (!file.type.startsWith('image/')) {
+        alert('이미지 파일만 업로드 가능합니다.');
+        return;
+      }
+      
+      // 파일 크기 제한 (10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        alert('이미지 크기는 10MB 이하여야 합니다.');
+        return;
+      }
+      
+      setClaimImage(file);
+      
+      // 미리보기 생성
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setClaimImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // 이미지 제거 핸들러
+  const handleImageRemove = () => {
+    setClaimImage(null);
+    setClaimImagePreview(null);
+  };
+
   // 회수 요청 처리
   const handleClaimRequest = async () => {
     if (!item || !claimMessage.trim()) return;
@@ -100,9 +137,14 @@ const LostItemDetailPage = () => {
     setSubmitting(true);
     
     try {
-      await claimApi.createClaimRequest(item.id, { message: claimMessage });
+      await claimApi.createClaimRequest(item.id, { 
+        message: claimMessage,
+        image: claimImage || undefined
+      });
       setShowClaimModal(false);
       setClaimMessage('');
+      setClaimImage(null);
+      setClaimImagePreview(null);
       // 성공 알림
       alert('회수 요청이 전송되었습니다. 습득자의 응답을 기다려주세요.');
       // 상태 업데이트를 위해 페이지 새로고침
@@ -309,13 +351,15 @@ const LostItemDetailPage = () => {
         onClose={() => {
           setShowClaimModal(false);
           setClaimMessage('');
+          setClaimImage(null);
+          setClaimImagePreview(null);
         }}
         title="회수 요청"
         size="md"
       >
         <div className="space-y-4">
           <p className="text-gray-600">
-            이 분실물을 회수하려는 이유를 간단히 설명해주세요.
+            이 분실물을 회수하려는 이유를 간단히 설명해주세요. 증빙 이미지를 첨부하면 더 신뢰할 수 있습니다.
           </p>
           
           <textarea
@@ -326,6 +370,53 @@ const LostItemDetailPage = () => {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             disabled={submitting}
           />
+
+          {/* 이미지 업로드 섹션 */}
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700">
+              증빙 이미지 (선택사항)
+            </label>
+            
+            {claimImagePreview ? (
+              <div className="relative">
+                <div className="relative w-full h-48 rounded-lg overflow-hidden border border-gray-300">
+                  <img
+                    src={claimImagePreview}
+                    alt="증빙 이미지 미리보기"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleImageRemove}
+                  className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                  disabled={submitting}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <p className="mt-1 text-xs text-gray-500">
+                  {claimImage?.name}
+                </p>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer hover:bg-gray-50 transition-colors">
+                <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                  <ImageIcon className="w-8 h-8 mb-2 text-gray-400" />
+                  <p className="mb-2 text-sm text-gray-500">
+                    <span className="font-semibold">클릭하여 이미지 선택</span> 또는 드래그 앤 드롭
+                  </p>
+                  <p className="text-xs text-gray-500">PNG, JPG, GIF (최대 10MB)</p>
+                </div>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handleImageSelect}
+                  disabled={submitting}
+                />
+              </label>
+            )}
+          </div>
           
           <div className="flex justify-end space-x-3">
             <Button 
@@ -333,6 +424,8 @@ const LostItemDetailPage = () => {
               onClick={() => {
                 setShowClaimModal(false);
                 setClaimMessage('');
+                setClaimImage(null);
+                setClaimImagePreview(null);
               }}
               disabled={submitting}
             >

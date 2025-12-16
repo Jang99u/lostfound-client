@@ -57,12 +57,14 @@ export interface ClaimRequest {
   claimerLoginId: string;
   status: ClaimStatus;
   message: string;
+  imageUrl?: string;
   createdAt: string;
 }
 
 // 회수 요청 생성
 export interface CreateClaimRequest {
   message: string;
+  image?: File;
 }
 
 // 통계 데이터
@@ -144,6 +146,19 @@ export interface SearchLostItemRequest {
   locationRadius?: number;  // 거리 (미터 단위, 10000=10km, 15000=15km, 20000=20km)
   page?: number;
   size?: number;
+}
+
+// 키워드 감시 타입
+export interface WatchKeyword {
+  id: number;
+  keyword: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
+// 키워드 등록 요청
+export interface CreateWatchKeywordRequest {
+  keyword: string;
 }
 
 // 마이페이지 타입

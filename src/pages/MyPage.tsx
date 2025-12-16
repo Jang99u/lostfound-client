@@ -13,7 +13,11 @@ import {
   Settings,
   Grid3X3,
   List,
-  Users
+  Users,
+  Search,
+  X,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 import Card from '../components/common/Card';
@@ -26,10 +30,11 @@ import { useAuth } from '../contexts/AuthContext';
 import { userApi } from '../apis/user';
 import { lostItemApi } from '../apis/lostItem';
 import { claimApi } from '../apis/claim';
-import type { MyPageData, ClaimRequest } from '../types';
+import { watchKeywordApi } from '../apis/watchKeyword';
+import type { MyPageData, ClaimRequest, WatchKeyword } from '../types';
 import { formatRelativeTime, formatNumber } from '../utils/cn';
 
-type TabType = 'all' | 'registered' | 'matched' | 'completed' | 'claims' | 'sent-claims';
+type TabType = 'all' | 'registered' | 'matched' | 'completed' | 'claims' | 'sent-claims' | 'keywords';
 type ViewMode = 'grid' | 'list';
 
 const MyPage = () => {
@@ -48,9 +53,13 @@ const MyPage = () => {
   const [error, setError] = useState('');
   const [myPageData, setMyPageData] = useState<MyPageData | null>(null);
   const [sentClaimRequests, setSentClaimRequests] = useState<ClaimRequest[]>([]);
+  const [watchKeywords, setWatchKeywords] = useState<WatchKeyword[]>([]);
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set());
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<number | null>(null);
+  const [showKeywordModal, setShowKeywordModal] = useState(false);
+  const [newKeyword, setNewKeyword] = useState('');
+  const [keywordError, setKeywordError] = useState('');
 
   // 통계 데이터
   const [stats, setStats] = useState({
@@ -72,13 +81,15 @@ const MyPage = () => {
 
       try {
         setLoading(true);
-        const [myPageResponse, sentClaimsResponse] = await Promise.all([
+        const [myPageResponse, sentClaimsResponse, keywordsResponse] = await Promise.all([
           userApi.getMyPage(),
-          claimApi.getSentClaimRequests()
+          claimApi.getSentClaimRequests(),
+          watchKeywordApi.getWatchKeywords().catch(() => []) // 키워드 API 실패해도 계속 진행
         ]);
         
         setMyPageData(myPageResponse);
         setSentClaimRequests(sentClaimsResponse);
+        setWatchKeywords(keywordsResponse);
         
         // 통계 계산 (안전하게 처리)
         const lostItems = myPageResponse.lostItems || [];
@@ -104,7 +115,7 @@ const MyPage = () => {
 
   // URL 파라미터 변경 시 탭 업데이트
   useEffect(() => {
-    if (tabParam && ['all', 'registered', 'matched', 'completed', 'claims', 'sent-claims'].includes(tabParam)) {
+    if (tabParam && ['all', 'registered', 'matched', 'completed', 'claims', 'sent-claims', 'keywords'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, [tabParam]);
@@ -144,6 +155,46 @@ const MyPage = () => {
       setError(errorMessage);
       setShowDeleteModal(false);
       setItemToDelete(null);
+    }
+  };
+
+  // 키워드 추가
+  const handleAddKeyword = async () => {
+    const keyword = newKeyword.trim();
+    if (!keyword) {
+      setKeywordError('키워드를 입력해주세요.');
+      return;
+    }
+
+    if (keyword.length < 2) {
+      setKeywordError('키워드는 최소 2자 이상이어야 합니다.');
+      return;
+    }
+
+    if (keyword.length > 50) {
+      setKeywordError('키워드는 최대 50자까지 입력 가능합니다.');
+      return;
+    }
+
+    setProcessing(true);
+    setKeywordError('');
+    
+    try {
+      const newWatchKeyword = await watchKeywordApi.createWatchKeyword({ keyword });
+      setWatchKeywords(prev => [newWatchKeyword, ...prev]);
+      setShowKeywordModal(false);
+      setNewKeyword('');
+      alert('키워드가 등록되었습니다.');
+    } catch (err: any) {
+      console.error('Failed to create keyword:', err);
+      const errorMessage = err.response?.data?.message || '키워드 등록에 실패했습니다.';
+      if (errorMessage.includes('이미') || errorMessage.includes('중복')) {
+        setKeywordError('이미 등록된 키워드입니다.');
+      } else {
+        setKeywordError(errorMessage);
+      }
+    } finally {
+      setProcessing(false);
     }
   };
 
@@ -345,7 +396,8 @@ const MyPage = () => {
                 { key: 'matched', label: '매칭중', count: stats.totalMatched },
                 { key: 'completed', label: '완료', count: stats.totalCompleted },
                 { key: 'claims', label: '받은 회수 요청', count: myPageData?.receivedClaimRequests?.length || 0 },
-                { key: 'sent-claims', label: '보낸 회수 요청', count: sentClaimRequests.length }
+                { key: 'sent-claims', label: '보낸 회수 요청', count: sentClaimRequests.length },
+                { key: 'keywords', label: '키워드 알림', count: watchKeywords.length }
               ].map((tab) => (
                 <button
                   key={tab.key}
@@ -448,6 +500,21 @@ const MyPage = () => {
                         <p className="text-sm font-medium text-gray-700 mb-2">요청 메시지:</p>
                         <p className="text-gray-800">{claim.message}</p>
                       </div>
+
+                      {/* 증빙 이미지 표시 */}
+                      {claim.imageUrl && (
+                        <div className="mb-3">
+                          <p className="text-sm font-medium text-gray-700 mb-2">증빙 이미지:</p>
+                          <div className="relative w-full max-w-md rounded-lg overflow-hidden border border-gray-300">
+                            <img
+                              src={claim.imageUrl}
+                              alt="증빙 이미지"
+                              className="w-full h-auto object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                              onClick={() => window.open(claim.imageUrl, '_blank')}
+                            />
+                          </div>
+                        </div>
+                      )}
                       
                       <div className="text-xs text-gray-500">
                         {formatRelativeTime(claim.createdAt)}
@@ -516,6 +583,21 @@ const MyPage = () => {
                         <p className="text-sm font-medium text-gray-700 mb-2">내가 보낸 메시지:</p>
                         <p className="text-gray-800">{claim.message}</p>
                       </div>
+
+                      {/* 증빙 이미지 표시 */}
+                      {claim.imageUrl && (
+                        <div className="mb-3">
+                          <p className="text-sm font-medium text-gray-700 mb-2">첨부한 증빙 이미지:</p>
+                          <div className="relative w-full max-w-md rounded-lg overflow-hidden border border-gray-300">
+                            <img
+                              src={claim.imageUrl}
+                              alt="증빙 이미지"
+                              className="w-full h-auto object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                              onClick={() => window.open(claim.imageUrl, '_blank')}
+                            />
+                          </div>
+                        </div>
+                      )}
                       
                       <div className="text-xs text-gray-500">
                         {formatRelativeTime(claim.createdAt)}
@@ -555,6 +637,101 @@ const MyPage = () => {
                 icon={<Bell className="w-16 h-16 text-gray-400" />}
                 title="보낸 회수 요청이 없습니다"
                 description="아직 회수 요청을 보내지 않았습니다."
+              />
+            )}
+          </div>
+        ) : activeTab === 'keywords' ? (
+          // 키워드 알림 관리
+          <div className="space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 mb-2">키워드 알림 관리</h2>
+                <p className="text-sm text-gray-600">
+                  관심 있는 키워드를 등록하면, 해당 키워드와 관련된 분실물이 등록될 때 알림을 받을 수 있습니다.
+                </p>
+              </div>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setNewKeyword('');
+                  setKeywordError('');
+                  setShowKeywordModal(true);
+                }}
+                leftIcon={<Plus className="w-4 h-4" />}
+              >
+                키워드 추가
+              </Button>
+            </div>
+
+            {watchKeywords.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {watchKeywords.map((keyword) => (
+                  <Card key={keyword.id} variant="elevated">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <Search className="w-5 h-5 text-blue-600" />
+                          <h3 className="text-lg font-semibold text-gray-900">
+                            {keyword.keyword}
+                          </h3>
+                        </div>
+                        <div className="flex items-center space-x-2 mb-3">
+                          <Badge variant={keyword.isActive ? 'success' : 'default'} size="sm">
+                            {keyword.isActive ? '활성' : '비활성'}
+                          </Badge>
+                          <span className="text-xs text-gray-500">
+                            {formatRelativeTime(keyword.createdAt)}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600">
+                          이 키워드가 포함된 분실물이 등록되면 알림을 받습니다.
+                        </p>
+                      </div>
+                      <div className="ml-4">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            if (!confirm(`'${keyword.keyword}' 키워드를 삭제하시겠습니까?`)) return;
+                            try {
+                              setProcessing(true);
+                              await watchKeywordApi.deleteWatchKeyword(keyword.id);
+                              setWatchKeywords(prev => prev.filter(k => k.id !== keyword.id));
+                            } catch (err: any) {
+                              console.error('Failed to delete keyword:', err);
+                              alert('키워드 삭제에 실패했습니다.');
+                            } finally {
+                              setProcessing(false);
+                            }
+                          }}
+                          disabled={processing}
+                          leftIcon={<Trash2 className="w-4 h-4" />}
+                        >
+                          삭제
+                        </Button>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon={<Search className="w-16 h-16 text-gray-400" />}
+                title="등록된 키워드가 없습니다"
+                description="관심 있는 키워드를 등록하여 관련 분실물 알림을 받아보세요."
+                action={
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      setNewKeyword('');
+                      setKeywordError('');
+                      setShowKeywordModal(true);
+                    }}
+                    leftIcon={<Plus className="w-4 h-4" />}
+                  >
+                    키워드 추가하기
+                  </Button>
+                }
               />
             )}
           </div>
@@ -780,6 +957,71 @@ const MyPage = () => {
               onClick={() => itemToDelete && handleDeleteItem(itemToDelete)}
             >
               삭제
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 키워드 추가 모달 */}
+      <Modal
+        isOpen={showKeywordModal}
+        onClose={() => {
+          setShowKeywordModal(false);
+          setNewKeyword('');
+          setKeywordError('');
+        }}
+        title="키워드 추가"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              키워드
+            </label>
+            <input
+              type="text"
+              placeholder="예: 구찌 지갑, 아이폰, 검은색 가방"
+              value={newKeyword}
+              onChange={(e) => {
+                setNewKeyword(e.target.value);
+                setKeywordError('');
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newKeyword.trim()) {
+                  handleAddKeyword();
+                }
+              }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              disabled={processing}
+            />
+            {keywordError && (
+              <p className="mt-1 text-sm text-red-600">{keywordError}</p>
+            )}
+            <p className="mt-2 text-xs text-gray-500">
+              이 키워드가 포함된 분실물이 등록되면 알림을 받을 수 있습니다.
+            </p>
+          </div>
+          
+          <div className="flex justify-end space-x-3">
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowKeywordModal(false);
+                setNewKeyword('');
+                setKeywordError('');
+              }}
+              disabled={processing}
+            >
+              취소
+            </Button>
+            <Button 
+              variant="primary" 
+              onClick={handleAddKeyword}
+              loading={processing}
+              disabled={!newKeyword.trim()}
+              leftIcon={<Plus className="w-4 h-4" />}
+            >
+              추가
             </Button>
           </div>
         </div>
